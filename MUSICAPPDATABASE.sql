@@ -18,6 +18,14 @@ CREATE TABLE song_artists(
 song_id INT REFERENCES songs(song_id),
 artist_id INT REFERENCES artists(artist_id)
 );
+--listen table--
+CREATE TABLE IF NOT EXISTS listens (
+    listen_id SERIAL PRIMARY KEY,
+    song_id INT REFERENCES songs(song_id),
+    listener_country TEXT NOT NULL,
+    listened_at TIMESTAMP DEFAULT now()
+);
+
 --RLS ENABLE--
 ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY songs_rls_policy
@@ -151,5 +159,7 @@ BEGIN
 	  --PERMISSION--
  GRANT SELECT,INSERT, DELETE ON ALL TABLES IN SCHEMA public To app_user;
  GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public To app_user; 
+
+
 
  
