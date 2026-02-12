@@ -28,16 +28,12 @@ CREATE TABLE IF NOT EXISTS listens (
 
 --RLS ENABLE--
 ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
+DROP POLICY songs_rls_policy ON songs;
 CREATE POLICY songs_rls_policy
 ON songs
 USING (
-    current_setting('app.user_role')= 'admin'
-	OR
-	(
-         distributor= current_setting('app.current_distributor')
-		 AND 
-		 (is_premium=false OR current_setting('app.subscription_level')='premium')
-	)
+    current_setting('app.user_role') = 'admin'
+    OR distributor = current_setting('app.current_distributor')
 );
 --CRUD FUNCTION--
 --1.Artists Insert--
@@ -109,10 +105,15 @@ CREATE OR REPLACE FUNCTION popular_genres()
 RETURNS TABLE (genre TEXT, total INT)
 LANGUAGE plpgsql
 AS $$
-BEGIN
-  RETURN QUERY SELECT genre, COUNT(*) FROM songs GROUP BY genre ORDER BY total DESC;
-  END;
-  $$;
+ BEGIN
+  RETURN QUERY
+  SELECT s.genre, COUNT(*)
+  FROM listens l
+  JOIN songs s ON l.song_id = s.song_id
+  GROUP BY s.genre
+  ORDER BY COUNT(*) DESC;
+END;
+$$;
   --2.TOP ARTIST--
   CREATE OR REPLACE FUNCTION top_artists()
   RETURNS TABLE (artist_name TEXT, total INT)
@@ -142,24 +143,33 @@ BEGIN
    $$;
    --4.SONGS Recommendation--
    CREATE OR REPLACE FUNCTION recommend_songs(p_genre TEXT)
-   RETURNS TABLE(song_title TEXT,artist_name TEXT)
-   LANGUAGE plpgsql
-   AS $$
-   BEGIN
-      RETURN QUERY
-	  SELECT s.song_title,a.artist_name
-	  FROM songs s
-	  JOIN song_artists sa ON s.song_id = sa.song_id
-	  JOIN artists a ON sa.artist_id= a.artist_id
-	  WHERE s.genre ILIKE p_genre
-	  ORDER BY s.release_year DESC 
-	  LIMIT 5;
-	  END;
-	  $$;
+RETURNS TABLE(song_title TEXT, artist_name TEXT)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT s.song_title, a.artist_name
+  FROM songs s
+  JOIN song_artists sa ON s.song_id = sa.song_id
+  JOIN artists a ON sa.artist_id = a.artist_id
+  WHERE s.genre ILIKE p_genre
+    AND (
+        s.is_premium = FALSE
+        OR current_setting('app.subscription_level') = 'premium'
+    )
+  ORDER BY s.release_year DESC
+  LIMIT 5;
+END;
+$$;
 	  --PERMISSION--
  GRANT SELECT,INSERT, DELETE ON ALL TABLES IN SCHEMA public To app_user;
  GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public To app_user; 
+--for avoiding duplication of songs--
+ALTER TABLE song_artists
+ADD CONSTRAINT uq_song_artist UNIQUE (song_id, artist_id);
+
 
 
 
  
+
