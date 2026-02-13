@@ -65,5 +65,7 @@ BEGIN
     ORDER BY avg_rating DESC;
 END;
 $$ LANGUAGE plpgsql;
-
+Delete from songs
+    where id=13;
 select *from songs;
+
