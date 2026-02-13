@@ -69,3 +69,49 @@ Delete from songs
     where id=13;
 select *from songs;
 
+-- Add is_premium flag to songs (premium content marker)
+ALTER TABLE songs 
+ADD COLUMN IF NOT EXISTS is_premium BOOLEAN DEFAULT FALSE;
+
+-- Example: mark some songs as premium (you can run this multiple times)
+UPDATE songs SET is_premium = TRUE 
+WHERE title IN ('Parelima', 'Gajalu', 'la la la', 'Bola Maya', 'Mero Mann Ma','Maya Garnu La');  -- your choice
+
+-- Create listener roles
+CREATE ROLE listener_free  WITH LOGIN PASSWORD 'free123' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+CREATE ROLE listener_premium WITH LOGIN PASSWORD 'premium456' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+
+-- Grants (only read access – no insert/update)
+GRANT CONNECT ON DATABASE appformusic TO listener_free, listener_premium;
+GRANT USAGE ON SCHEMA public TO listener_free, listener_premium;
+GRANT SELECT ON songs TO listener_free, listener_premium;
+
+-- RLS policy for free listeners – only non-premium songs
+CREATE POLICY listener_free_policy ON songs
+    FOR SELECT
+    USING (
+        current_user = 'listener_free'
+        AND is_premium = FALSE
+    );
+
+-- RLS policy for premium listeners – all songs
+CREATE POLICY listener_premium_policy ON songs
+    FOR SELECT
+    USING (
+        current_user = 'listener_premium'
+    );
+
+-- Simple function just for listeners (shows count per genre – no averages)
+CREATE OR REPLACE FUNCTION listener_genre_counts()
+RETURNS TABLE (
+    genre_name VARCHAR,
+    song_count BIGINT
+) LANGUAGE sql SECURITY DEFINER AS $$
+    SELECT genre, COUNT(*)
+    FROM songs
+    WHERE added_by = current_user   -- actually not used, but keeps consistent style
+       OR current_user IN ('listener_free', 'listener_premium')
+    GROUP BY genre
+    ORDER BY song_count DESC;
+$$;
+select *from songs
