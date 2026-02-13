@@ -1,12 +1,10 @@
 # music_rls_viz.py
 # Requirements: pip install psycopg2-binary matplotlib
-
 import psycopg2
 import matplotlib.pyplot as plt
-
 # ── SWITCH USER HERE ────────────────────────────────────────────────
 # Use "appuser" → restricted by RLS (only sees/inserts own songs)
-# Use "admin"   → bypasses RLS (sees and inserts everything)
+# Use "adminn"   → bypasses RLS (sees and inserts everything)
 DB_USER = "appuser"           # ← change to "appuser" to see RLS in action
 
 DB_CONFIG = {
@@ -98,24 +96,20 @@ def main():
         # Add some example songs (RLS will decide visibility)
         print("\nAdding example songs...")
         add_song(conn, "Yellow", "Cold Play", "Rock", 5)
-        
-        
-        
-        
-        # Show visible data
+         add_song(conn,"Expresso","Sabrina Carpenter","Pop",4)
+        add_song(conn,"Lover","Taylor Swift","Pop",4.5)
+         # Show visible data
         show_my_songs(conn)
-        
         # Use function + visualization
         avg_data = show_avg_per_genre(conn)
         plot_genre_avg(avg_data)
         
         print("\nDone. Try changing DB_USER and run again to see RLS difference.")
-        
-    except Exception as e:
+        except Exception as e:
         print(f"Error during execution: {e}")
     finally:
         if conn:
             conn.close()
-
 if __name__ == "__main__":
+
     main()
