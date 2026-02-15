@@ -20,4 +20,4 @@ PostgreSQL Functions used in application:
 
 Search — title/artist search with gating for free users
 Recommendations — top-rated premium tracks for premium users
-Console-based (no web UI — as per requirement "UI is not important")
+Console-based app
