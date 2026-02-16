@@ -1,8 +1,5 @@
 # music_app_multi_tenant.py
-# Multi-tenant music app demo
-# - Free users see only non-premium songs
-# - appuser sees own uploads + personal stats
-# - adminn sees ALL songs in tenant + who uploaded them + stats
+# Complete multi-tenant music app demo
 # Requirements: pip install psycopg2-binary matplotlib
 
 import psycopg2
@@ -10,8 +7,8 @@ import matplotlib.pyplot as plt
 from psycopg2 import Error as PsycopgError
 
 # ── CHANGE THESE TO TEST DIFFERENT ROLES / TENANTS ──────────────────────────
-DB_USER      = "appuser"                                   # appuser, adminn, listener_free, listener_premium
-DB_TENANT_ID = "244f866c-7a71-460e-a493-2c4a9daf4e7e"     # ← real UUID from your tenants table
+DB_USER      = "adminn"                                   # appuser, adminn, listener_free, listener_premium
+DB_TENANT_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"     # ← real UUID from your tenants table
 # ─────────────────────────────────────────────────────────────────────────────
 
 DB_PASSWORD_MAP = {
@@ -47,29 +44,44 @@ def connect():
         raise
 
 
-def add_song(conn, title, artist, genre, rating, is_premium=False):
+def add_song_interactive(conn):
     if DB_USER not in ["appuser", "adminn"]:
         print("Only appuser/adminn can add songs.")
         return
+    print("\n=== Add New Song ===")
+    title  = input("Song title: ").strip()
+    artist = input("Artist: ").strip()
+    genre  = input("Genre: ").strip()
+
+    while True:
+        try:
+            rating = float(input("Rating (0.0–5.0): ").strip())
+            if 0 <= rating <= 5:
+                break
+            print("Rating must be between 0.0 and 5.0")
+        except ValueError:
+            print("Please enter a valid number")
+
+    premium_input = input("Premium song? [y/n]: ").strip().lower()
+    is_premium = premium_input in ('y', 'yes', '1')
+
     try:
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO songs (title, artist, genre, rating, is_premium, tenant_id)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (title, artist, genre, rating, is_premium, DB_TENANT_ID))
-        print(f"Added → {title} ({genre}) {rating}/5  premium={is_premium}")
+        print(f"\nSong added: {title} by {artist} ({genre}, {rating}/5, {'Premium' if is_premium else 'Free'})")
     except PsycopgError as e:
-        print(f"Add song failed: {e}")
+        print(f"Failed to add song: {e}")
 
 
 def show_songs_dashboard(conn):
     if DB_USER not in ["appuser", "adminn"]:
         return
-
     try:
         with conn.cursor() as cur:
             if DB_USER == "adminn":
-                # Admin sees ALL songs in the tenant + uploader info
                 cur.execute("""
                     SELECT title, artist, genre, rating, is_premium, added_by
                     FROM songs
@@ -84,12 +96,11 @@ def show_songs_dashboard(conn):
 
                 print(f"\nAll songs in tenant ({len(rows)}):")
                 for r in rows:
-                    title, artist, genre, rating, is_premium, added_by = r
-                    tag = " [Premium]" if is_premium else ""
-                    print(f"  • {title:<35} {artist:<20} {genre:<12} {rating}{tag}  (by {added_by})")
+                    t, a, g, r_val, p, by = r
+                    tag = " [Premium]" if p else ""
+                    print(f"  • {t:<35} {a:<20} {g:<12} {r_val}{tag}  (by {by})")
 
             else:
-                # appuser sees only their own songs
                 cur.execute("""
                     SELECT title, artist, genre, rating, is_premium
                     FROM songs
@@ -105,18 +116,17 @@ def show_songs_dashboard(conn):
 
                 print(f"\nYour uploaded songs ({len(rows)}):")
                 for r in rows:
-                    title, artist, genre, rating, is_premium = r
-                    tag = " [Premium]" if is_premium else ""
-                    print(f"  • {title:<35} {artist:<20} {genre:<12} {rating}{tag}")
+                    t, a, g, r_val, p = r
+                    tag = " [Premium]" if p else ""
+                    print(f"  • {t:<35} {a:<20} {g:<12} {r_val}{tag}")
 
     except PsycopgError as e:
-        print(f"Error loading songs dashboard: {e}")
+        print(f"Error loading songs: {e}")
 
 
 def show_avg_rating_dashboard(conn):
     if DB_USER not in ["appuser", "adminn"]:
         return None
-
     prefix = "Tenant-wide" if DB_USER == "adminn" else "Your"
     try:
         with conn.cursor() as cur:
@@ -128,8 +138,8 @@ def show_avg_rating_dashboard(conn):
             return None
 
         print(f"\n{prefix} average rating per genre:")
-        for genre, avg in rows:
-            print(f"  {genre:18} → {avg:.1f}")
+        for g, avg in rows:
+            print(f"  {g:18} → {avg:.1f}")
 
         return rows
     except PsycopgError as e:
@@ -140,7 +150,6 @@ def show_avg_rating_dashboard(conn):
 def plot_genre_avg(data):
     if not data:
         return
-
     genres = [row[0] for row in data]
     avgs   = [float(row[1]) for row in data]
 
@@ -208,6 +217,28 @@ def show_genre_counts(conn):
         print(f"Genre counts error: {e}")
 
 
+def show_premium_recommendations(conn):
+    if DB_USER != "listener_premium":
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM premium_recommendations(6)")
+            rows = cur.fetchall()
+
+        if not rows:
+            print("\nNo premium recommendations available yet.")
+            return
+
+        print(f"\nYour Premium Recommendations ({len(rows)} songs):")
+        print("   (top-rated premium tracks in your tenant)")
+        for row in rows:
+            t, a, g, r, p = row
+            print(f"  • {t:<35} {a:<20} {g:<12} {r} [Premium]")
+
+    except PsycopgError as e:
+        print(f"Recommendations error: {e}")
+
+
 def get_profile(conn):
     try:
         with conn.cursor() as cur:
@@ -260,10 +291,28 @@ def main():
 
         if DB_USER in ["appuser", "adminn"]:
             print("=== Dashboard ===")
+
             show_songs_dashboard(conn)
             avg_data = show_avg_rating_dashboard(conn)
             if avg_data:
                 plot_genre_avg(avg_data)
+
+            while True:
+                print("\nOptions:")
+                print("  [a] Add new song")
+                print("  [r] Refresh dashboard")
+                print("  [q] Quit dashboard")
+                choice = input("Choose: ").strip().lower()
+
+                if choice == 'q':
+                    break
+                elif choice == 'a':
+                    add_song_interactive(conn)
+                    show_songs_dashboard(conn)  # refresh
+                elif choice == 'r':
+                    show_songs_dashboard(conn)
+                else:
+                    print("Invalid choice.")
 
         else:  # listener mode
             name, addr = get_profile(conn)
@@ -283,7 +332,12 @@ def main():
             show_songs_for_listeners(conn)
             show_genre_counts(conn)
 
-        print("\nDone.")
+            if DB_USER == "listener_premium":
+                print("\nWould you like personalized premium recommendations? [y/n]")
+                if input("> ").strip().lower().startswith('y'):
+                    show_premium_recommendations(conn)
+
+        print("\nDone. Change DB_USER to switch roles.")
 
     except Exception as e:
         print(f"Main error: {e}")
