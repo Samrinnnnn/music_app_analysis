@@ -7,6 +7,8 @@ Multi-role access with RLS isolation:
 2) adminn — full access (sees all songs, bypasses RLS) + dashboard
 3) listener_free — sees only non-premium songs + search (blocks premium content) + upgrade option
 4) listener_premium — sees all songs + search + personalized recommendations
+5) admin_manage_tenants- only admin will be able to view all tenants.
+6) tenant_isolation_songs - where on table songs, tenants are isolated to view eachother.
    
 PostgreSQL Functions used in application:
 1) get_avg_rating_per_genre() — average rating per genre for current user
@@ -17,7 +19,7 @@ PostgreSQL Functions used in application:
 6) User profile (name + address) — saved per listener role, shown on welcome
 7) Premium gating — free users see only non-premium songs
 8) Simulated premium subscription — upgrade prompt + record in premium_subscriptions
-
+9)set_app_current_tenants- only own songs are viewed by tenants, with unique ID too.
 Search — title/artist search with gating for free users
 Recommendations — top-rated premium tracks for premium users
 Console-based app
