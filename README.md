@@ -1,5 +1,5 @@
 A simple yet powerful console-based music application built in Python with PostgreSQL as the backend.
-This project demonstrates Row Level Security (RLS), custom PostgreSQL functions, role-based access control, premium content gating, user profiles, simulated subscriptions, search, and personalized recommendations.
+This project demonstrates Row Level Security (RLS), custom PostgreSQL functions, role-based access control, premium content gating, user profiles, simulated subscriptions, search, and personalized recommendations for multi-tenants too.
 
 Features:
 Multi-role access with RLS isolation:
