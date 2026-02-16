@@ -1,11 +1,4 @@
--- =============================================================================
--- musicdatabase.sql – Complete Music App Database Setup
--- All roles, tables, RLS policies, functions and grants in one file
--- Run as superuser (postgres) on database 'appformusic'
--- Last updated: February 2026
--- =============================================================================
-
--- 1. Create all roles if they don't exist
+-- 1. Create roles
 DO $$ BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'appuser') THEN
         CREATE ROLE appuser WITH LOGIN PASSWORD 'pass123';
@@ -30,11 +23,37 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- 2. Basic database & schema permissions for all roles
+-- 2. Basic permissions
 GRANT CONNECT ON DATABASE appformusic TO appuser, adminn, listener_free, listener_premium;
 GRANT USAGE ON SCHEMA public TO appuser, adminn, listener_free, listener_premium;
 
--- 3. Songs table – core content
+-- 2.1 Tenants table
+DROP TABLE IF EXISTS tenants CASCADE;
+CREATE TABLE tenants (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name        VARCHAR(120) NOT NULL,
+    slug        VARCHAR(60)  UNIQUE NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    is_active   BOOLEAN DEFAULT TRUE
+);
+
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY admin_manage_tenants ON tenants
+    FOR ALL USING (current_user = 'adminn') WITH CHECK (current_user = 'adminn');
+
+GRANT ALL ON tenants TO adminn;
+
+-- 2.2 Helper to set current tenant
+CREATE OR REPLACE FUNCTION set_app_current_tenant(p_tenant_id UUID)
+RETURNS VOID LANGUAGE sql AS $$
+    SELECT set_config('app.current_tenant', p_tenant_id::text, true);
+$$;
+
+GRANT EXECUTE ON FUNCTION set_app_current_tenant(UUID)
+    TO appuser, adminn, listener_free, listener_premium;
+
+-- 3. Songs (multi-tenant)
 DROP TABLE IF EXISTS songs CASCADE;
 CREATE TABLE songs (
     id          SERIAL PRIMARY KEY,
@@ -43,157 +62,138 @@ CREATE TABLE songs (
     genre       VARCHAR(60)  NOT NULL,
     rating      NUMERIC(3,1) CHECK (rating BETWEEN 0 AND 5),
     is_premium  BOOLEAN DEFAULT FALSE,
-    added_by    TEXT NOT NULL DEFAULT current_user
+    added_by    TEXT NOT NULL DEFAULT current_user,
+    tenant_id   UUID NOT NULL REFERENCES tenants(id)
 );
 
--- Enable RLS on songs
 ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
 
--- Policies for song owners (appuser/adminn)
-CREATE POLICY own_rows_select ON songs FOR SELECT USING (added_by = current_user);
-CREATE POLICY own_rows_insert ON songs FOR INSERT WITH CHECK (added_by = current_user);
-CREATE POLICY own_rows_update ON songs FOR UPDATE USING (added_by = current_user);
+-- Tenant isolation (strongest rule — must come first)
+CREATE POLICY tenant_isolation_songs ON songs FOR ALL
+    USING (tenant_id = current_setting('app.current_tenant')::uuid)
+    WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
 
--- Listener policies (free sees non-premium, premium sees all)
-CREATE POLICY listener_free_policy ON songs
-    FOR SELECT
-    USING (current_user = 'listener_free' AND is_premium = FALSE);
+-- Owner rules (within tenant)
+CREATE POLICY song_owner ON songs FOR ALL
+    USING (added_by = current_user AND tenant_id = current_setting('app.current_tenant')::uuid)
+    WITH CHECK (added_by = current_user AND tenant_id = current_setting('app.current_tenant')::uuid);
 
-CREATE POLICY listener_premium_policy ON songs
-    FOR SELECT
-    USING (current_user = 'listener_premium');
+-- Listener access (within tenant)
+CREATE POLICY listener_free_songs ON songs FOR SELECT
+    USING (current_user = 'listener_free' AND is_premium = FALSE AND tenant_id = current_setting('app.current_tenant')::uuid);
 
--- Privileges on songs
+CREATE POLICY listener_premium_songs ON songs FOR SELECT
+    USING (current_user = 'listener_premium' AND tenant_id = current_setting('app.current_tenant')::uuid);
+
 GRANT SELECT, INSERT, UPDATE ON songs TO appuser;
 GRANT USAGE, SELECT ON SEQUENCE songs_id_seq TO appuser;
-
-GRANT ALL PRIVILEGES ON songs TO adminn;
-GRANT ALL PRIVILEGES ON SEQUENCE songs_id_seq TO adminn;
-
+GRANT ALL ON songs TO adminn;
+GRANT ALL ON SEQUENCE songs_id_seq TO adminn;
 GRANT SELECT ON songs TO listener_free, listener_premium;
 
--- 4. Listener Profiles (name + address per role)
+-- 4. Listener profiles (multi-tenant)
 CREATE TABLE IF NOT EXISTS listener_profiles (
     user_name    TEXT PRIMARY KEY,
     full_name    VARCHAR(100) NOT NULL,
     address      TEXT NOT NULL,
-    updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at   TIMESTAMPTZ DEFAULT NOW(),
+    tenant_id    UUID NOT NULL REFERENCES tenants(id)
 );
 
 ALTER TABLE listener_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY own_profile ON listener_profiles
-    FOR ALL
-    USING (user_name = current_user)
-    WITH CHECK (user_name = current_user);
+CREATE POLICY tenant_listener_profiles ON listener_profiles FOR ALL
+    USING (tenant_id = current_setting('app.current_tenant')::uuid)
+    WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+CREATE POLICY own_profile ON listener_profiles FOR ALL
+    USING (user_name = current_user AND tenant_id = current_setting('app.current_tenant')::uuid)
+    WITH CHECK (user_name = current_user AND tenant_id = current_setting('app.current_tenant')::uuid);
 
 GRANT SELECT, INSERT, UPDATE ON listener_profiles TO listener_free, listener_premium;
-GRANT USAGE, SELECT, UPDATE ON SEQUENCE listener_profiles_id_seq TO listener_free, listener_premium;
 
--- 5. Premium Subscriptions (upgrade simulation)
+-- 5. Premium subscriptions (multi-tenant)
 CREATE TABLE IF NOT EXISTS premium_subscriptions (
     user_name        TEXT PRIMARY KEY REFERENCES listener_profiles(user_name),
     amount           NUMERIC(10,2) DEFAULT 99.99,
     payment_status   TEXT DEFAULT 'completed',
-    subscribed_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at       TIMESTAMP,
-    added_by         TEXT DEFAULT current_user
+    subscribed_at    TIMESTAMPTZ DEFAULT NOW(),
+    expires_at       TIMESTAMPTZ,
+    added_by         TEXT DEFAULT current_user,
+    tenant_id        UUID NOT NULL REFERENCES tenants(id)
 );
 
 ALTER TABLE premium_subscriptions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY own_subscription ON premium_subscriptions
-    FOR ALL
-    USING (user_name = current_user)
-    WITH CHECK (user_name = current_user);
+CREATE POLICY tenant_subscriptions ON premium_subscriptions FOR ALL
+    USING (tenant_id = current_setting('app.current_tenant')::uuid)
+    WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+
+CREATE POLICY own_subscription ON premium_subscriptions FOR ALL
+    USING (user_name = current_user AND tenant_id = current_setting('app.current_tenant')::uuid)
+    WITH CHECK (user_name = current_user AND tenant_id = current_setting('app.current_tenant')::uuid);
 
 GRANT SELECT, INSERT, UPDATE ON premium_subscriptions TO listener_free, listener_premium;
-GRANT USAGE, SELECT, UPDATE ON SEQUENCE premium_subscriptions_id_seq TO listener_free, listener_premium;
 
--- 6. Functions
+-- 6. Functions (tenant-aware)
 
--- Average rating per genre (for appuser/adminn)
 CREATE OR REPLACE FUNCTION get_avg_rating_per_genre()
-RETURNS TABLE (
-    genre_name VARCHAR,
-    avg_rating NUMERIC
-)
-LANGUAGE plpgsql
-AS $$
+RETURNS TABLE (genre_name VARCHAR, avg_rating NUMERIC)
+LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
     SELECT genre, ROUND(AVG(rating), 1)
     FROM songs
     WHERE added_by = current_user
+      AND tenant_id = current_setting('app.current_tenant')::uuid
     GROUP BY genre
     ORDER BY avg_rating DESC;
 END;
 $$;
 
--- Genre counts for listeners
 CREATE OR REPLACE FUNCTION listener_genre_counts()
-RETURNS TABLE (
-    genre_name VARCHAR,
-    song_count BIGINT
-)
-LANGUAGE sql
-SECURITY DEFINER
-AS $$
+RETURNS TABLE (genre_name VARCHAR, song_count BIGINT)
+LANGUAGE sql SECURITY DEFINER AS $$
     SELECT genre, COUNT(*)
     FROM songs
-    GROUP BY genre
-    HAVING COUNT(*) > 0
+    WHERE tenant_id = current_setting('app.current_tenant')::uuid
+    GROUP BY genre HAVING COUNT(*) > 0
     ORDER BY COUNT(*) DESC;
 $$;
 
--- Premium recommendations
 CREATE OR REPLACE FUNCTION premium_recommendations(limit_count INT DEFAULT 6)
-RETURNS TABLE (
-    title      VARCHAR,
-    artist     VARCHAR,
-    genre      VARCHAR,
-    rating     NUMERIC,
-    is_premium BOOLEAN
-)
-LANGUAGE sql
-SECURITY DEFINER
-AS $$
+RETURNS TABLE (title VARCHAR, artist VARCHAR, genre VARCHAR, rating NUMERIC, is_premium BOOLEAN)
+LANGUAGE sql SECURITY DEFINER AS $$
     SELECT title, artist, genre, rating, is_premium
     FROM songs
     WHERE is_premium = TRUE
       AND rating IS NOT NULL
+      AND tenant_id = current_setting('app.current_tenant')::uuid
     ORDER BY rating DESC, RANDOM()
     LIMIT limit_count;
 $$;
 
--- Get current user's profile
 CREATE OR REPLACE FUNCTION get_listener_profile()
-RETURNS TABLE (
-    full_name VARCHAR(100),
-    address   TEXT
-)
-LANGUAGE sql
-AS $$
+RETURNS TABLE (full_name VARCHAR(100), address TEXT)
+LANGUAGE sql AS $$
     SELECT full_name, address
     FROM listener_profiles
-    WHERE user_name = current_user;
+    WHERE user_name = current_user
+      AND tenant_id = current_setting('app.current_tenant')::uuid;
 $$;
 
--- Update/create profile
 CREATE OR REPLACE FUNCTION update_listener_profile(
     p_full_name VARCHAR(100),
     p_address   TEXT
 )
-RETURNS TEXT
-LANGUAGE plpgsql
-AS $$
+RETURNS TEXT LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO listener_profiles (user_name, full_name, address)
-    VALUES (current_user, p_full_name, p_address)
+    INSERT INTO listener_profiles (user_name, full_name, address, tenant_id)
+    VALUES (current_user, p_full_name, p_address, current_setting('app.current_tenant')::uuid)
     ON CONFLICT (user_name) DO UPDATE SET
         full_name  = EXCLUDED.full_name,
         address    = EXCLUDED.address,
-        updated_at = CURRENT_TIMESTAMP;
+        updated_at = NOW();
 
     RETURN 'Profile updated successfully.';
 EXCEPTION WHEN OTHERS THEN
@@ -201,33 +201,21 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
--- Simulate premium upgrade
 CREATE OR REPLACE FUNCTION subscribe_to_premium()
-RETURNS TEXT
-LANGUAGE plpgsql
-AS $$
+RETURNS TEXT LANGUAGE plpgsql AS $$
 BEGIN
-    INSERT INTO premium_subscriptions (user_name)
-    VALUES (current_user)
+    INSERT INTO premium_subscriptions (user_name, tenant_id)
+    VALUES (current_user, current_setting('app.current_tenant')::uuid)
     ON CONFLICT (user_name) DO UPDATE SET
-        subscribed_at   = CURRENT_TIMESTAMP,
+        subscribed_at   = NOW(),
         payment_status  = 'completed';
 
-    RETURN 'Premium subscription successful! (simulated payment of 99.99)';
+    RETURN 'Premium subscription successful! (simulated)';
 EXCEPTION WHEN OTHERS THEN
     RETURN 'Error: ' || SQLERRM;
 END;
 $$;
 
--- Grant function execution rights
-GRANT EXECUTE ON FUNCTION get_avg_rating_per_genre()          TO appuser, adminn;
-GRANT EXECUTE ON FUNCTION listener_genre_counts()             TO listener_free, listener_premium;
-GRANT EXECUTE ON FUNCTION premium_recommendations(INT)        TO listener_premium;
-GRANT EXECUTE ON FUNCTION get_listener_profile()              TO listener_free, listener_premium;
-GRANT EXECUTE ON FUNCTION update_listener_profile(VARCHAR, TEXT) TO listener_free, listener_premium;
-GRANT EXECUTE ON FUNCTION subscribe_to_premium()              TO listener_free, listener_premium;
+-- Function grants
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
 
--- =============================================================================
--- End of file – all roles and features created
--- Run this file once as superuser to set up everything
--- =============================================================================
