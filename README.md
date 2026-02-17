@@ -21,7 +21,7 @@
       8) Simulated premium subscription — upgrade prompt + record in premium_subscriptions
       9)set_app_current_tenants- only own songs are viewed by tenants, with unique ID too.
       
-      Search — title/artist search with gating for free users
+      
       
       Recommendations — top-rated premium tracks for premium users
                                                                               
