@@ -5,8 +5,8 @@
       Multi-role access with RLS isolation:
       1) appuser — adds and sees only their own songs + dashboard (averages + chart)
       2) adminn — full access (sees all songs, bypasses RLS) + dashboard
-      3) listener_free — sees only non-premium songs + search (blocks premium content) + upgrade option
-      4) listener_premium — sees all songs + search + personalized recommendations
+      3) listener_free — sees only non-premium songs +  (blocks premium content) + upgrade option
+      4) listener_premium — sees all songs +  personalized recommendations
       5) admin_manage_tenants- only admin will be able to view all tenants.
       6) tenant_isolation_songs - where on table songs, tenants are isolated to view eachother.
          
