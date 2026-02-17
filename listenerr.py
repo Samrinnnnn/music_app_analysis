@@ -1,5 +1,5 @@
-# music_app_multi_tenant.py
-# Complete multi-tenant music app demo
+# finL.py
+# Updated: Added search option for all roles
 # Requirements: pip install psycopg2-binary matplotlib
 
 import psycopg2
@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 from psycopg2 import Error as PsycopgError
 
 # ── CHANGE THESE TO TEST DIFFERENT ROLES / TENANTS ──────────────────────────
-DB_USER      = "adminn"                                   # appuser, adminn, listener_free, listener_premium
-DB_TENANT_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"     # ← real UUID from your tenants table
+DB_USER      = "listener_premium"                         # appuser, adminn, listener_free, listener_premium
+DB_TENANT_ID = "244f866c-7a71-460e-a493-2c4a9daf4e7e"     # ← real UUID from your tenants table
 # ─────────────────────────────────────────────────────────────────────────────
 
 DB_PASSWORD_MAP = {
@@ -216,6 +216,71 @@ def show_genre_counts(conn):
     except PsycopgError as e:
         print(f"Genre counts error: {e}")
 
+def search_song(conn):
+    print("\nSearch songs (title or artist) – type 'exit' to stop")
+    while True:
+        term = input("> ").strip()
+        if term.lower() == "exit":
+            break
+        if not term:
+            continue
+
+        try:
+            with conn.cursor() as cur:
+                if DB_USER in ["appuser", "adminn"]:
+                    # For uploaders: filter by ownership (appuser own only, admin all)
+                    if DB_USER == "appuser":
+                        cur.execute("""
+                            SELECT title, artist, genre, rating, is_premium
+                            FROM songs
+                            WHERE (LOWER(title) LIKE LOWER(%s) OR LOWER(artist) LIKE LOWER(%s))
+                              AND added_by = current_user
+                            ORDER BY title
+                            LIMIT 10
+                        """, (f"%{term}%", f"%{term}%"))
+                    else:  # adminn sees all
+                        cur.execute("""
+                            SELECT title, artist, genre, rating, is_premium
+                            FROM songs
+                            WHERE LOWER(title) LIKE LOWER(%s)
+                               OR LOWER(artist) LIKE LOWER(%s)
+                            ORDER BY title
+                            LIMIT 10
+                        """, (f"%{term}%", f"%{term}%"))
+                else:
+                    # Listeners use broad search (already filtered by RLS)
+                    cur.execute("""
+                        SELECT title, artist, genre, rating, is_premium
+                        FROM songs
+                        WHERE LOWER(title) LIKE LOWER(%s)
+                           OR LOWER(artist) LIKE LOWER(%s)
+                        ORDER BY title
+                        LIMIT 10
+                    """, (f"%{term}%", f"%{term}%"))
+
+                rows = cur.fetchall()
+
+            if not rows:
+                print(f"No results for '{term}'")
+                continue
+
+            print(f"\nResults for '{term}' ({len(rows)} found):")
+            visible = 0
+            for r in rows:
+                title, artist, genre, rating, is_premium = r
+                if DB_USER == "listener_free" and is_premium:
+                    continue
+                visible += 1
+                tag = " [Premium]" if is_premium else ""
+                print(f"  • {title:<35} {artist:<20} {genre:<12} {rating}{tag}")
+
+            if visible == 0:
+                print("  No matching songs visible to your role.")
+
+        except PsycopgError as e:
+            print(f"Search error: {e}")
+
+
 
 def show_premium_recommendations(conn):
     if DB_USER != "listener_premium":
@@ -300,6 +365,7 @@ def main():
             while True:
                 print("\nOptions:")
                 print("  [a] Add new song")
+                print("  [s] Search songs")
                 print("  [r] Refresh dashboard")
                 print("  [q] Quit dashboard")
                 choice = input("Choose: ").strip().lower()
@@ -308,7 +374,9 @@ def main():
                     break
                 elif choice == 'a':
                     add_song_interactive(conn)
-                    show_songs_dashboard(conn)  # refresh
+                    show_songs_dashboard(conn)
+                elif choice == 's':
+                    search_song(conn)
                 elif choice == 'r':
                     show_songs_dashboard(conn)
                 else:
@@ -331,6 +399,10 @@ def main():
 
             show_songs_for_listeners(conn)
             show_genre_counts(conn)
+
+            # Search option for listeners too
+            print("\nSearch songs (title or artist) – type 'exit' to continue")
+            search_song(conn)
 
             if DB_USER == "listener_premium":
                 print("\nWould you like personalized premium recommendations? [y/n]")
