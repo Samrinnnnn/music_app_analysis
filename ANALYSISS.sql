@@ -33,6 +33,23 @@ ORDER BY rating DESC
 LIMIT 10;
 --LISTENER ANALYSIS
 --6.Total listeners per tenant
+SELECT *FROM premium_subscriptions;
+
+SELECT COUNT(id) as total_listener,tenant_id
+FROM listener_profiles
+GROUP BY tenant_id;
+--7.Premium subscription count per tenant
+
+SELECT COUNT(id) as total_premium_subscription, tenant_id
+FROM premium_subscriptions
+GROUP BY tenant_id;
+
+--8.Subscription revenue per tenant
+SELECT SUM(amount) as revenue, tenant_id 
+FROM premium_subscriptions
+where payment_status='completed'
+GROUP BY tenant_id;
+
 
 
 
