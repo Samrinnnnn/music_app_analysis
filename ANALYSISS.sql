@@ -68,6 +68,16 @@ ON l.user_name = p.user_name
 GROUP BY l.tenant_id;
 
 
+--security analysis
+
+--10.Who added most songs?
+select *from songs;
+
+SELECT COUNT(added_by) as total, added_by
+FROM songs
+GROUP BY added_by;
+
+
 
 
 
