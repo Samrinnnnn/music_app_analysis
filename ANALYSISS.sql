@@ -85,6 +85,19 @@ LEFT JOIN tenants t ON s.tenant_id=t.id
 GROUP BY  s.title, t.id
 ORDER BY tenants_contribution ASC;
 
+--UNION ANALYSIS
+--12. Show all users (free + premium) in one list
+
+SELECT *FROM listener_profiles;
+
+SELECT user_name, 'Free User' AS type
+FROM listener_profiles
+WHERE user_name NOT IN (SELECT user_name FROM premium_subscriptions)
+
+UNION
+
+SELECT user_name, 'Premium User' AS type
+FROM premium_subscriptions;
 
 
 
