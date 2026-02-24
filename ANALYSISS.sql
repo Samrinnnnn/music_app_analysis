@@ -77,6 +77,13 @@ SELECT COUNT(added_by) as total, added_by
 FROM songs
 GROUP BY added_by;
 
+--ADVANCED ANALYSIS
+--11.Find inactive tenants
+SELECT s.title,t.id , COUNT(s.tenant_id) as tenants_contribution
+FROM songs s
+LEFT JOIN tenants t ON s.tenant_id=t.id
+GROUP BY  s.title, t.id
+ORDER BY tenants_contribution ASC;
 
 
 
