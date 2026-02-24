@@ -50,6 +50,24 @@ FROM premium_subscriptions
 where payment_status='completed'
 GROUP BY tenant_id;
 
+--Business Analysis
+--9. Conversion rate (Free → Premium)
+SELECT *from listener_profiles;
+
+/*SELECT COUNT(payment_status) as conversion_rate ,
+FROM premium_subscriptions
+where payment_status='completed';*/
+
+SELECT 
+    l.tenant_id,
+    COUNT(DISTINCT l.user_name) AS total_users,
+    COUNT(DISTINCT p.user_name) AS premium_users
+FROM listener_profiles l
+LEFT JOIN premium_subscriptions p
+ON l.user_name = p.user_name
+GROUP BY l.tenant_id;
+
+
 
 
 
