@@ -55,15 +55,17 @@ GRANT EXECUTE ON FUNCTION set_app_current_tenant(UUID)
 
 -- 3. Songs (multi-tenant)
 DROP TABLE IF EXISTS songs CASCADE;
-CREATE TABLE songs (
-    id          SERIAL PRIMARY KEY,
-    title       VARCHAR(150) NOT NULL,
-    artist      VARCHAR(100) NOT NULL,
-    genre       VARCHAR(60)  NOT NULL,
-    rating      NUMERIC(3,1) CHECK (rating BETWEEN 0 AND 5),
-    is_premium  BOOLEAN DEFAULT FALSE,
-    added_by    TEXT NOT NULL DEFAULT current_user,
-    tenant_id   UUID NOT NULL REFERENCES tenants(id)
+CREATE TABLE songs(
+song_id  SERIAL PRIMARY KEY,
+title    VARCHAR(150) NOT NULL,
+artist   VARCHAR(50) NOT NULL,
+genre    VARCHAR(60) NOT NULL,
+rating   NUMERIC(3,1) CHECK(rating BETWEEN 0 AND 5 ),
+is_premium BOOLEAN DEFAULT FALSE,
+added_by  TEXT NOT NULL DEFAULT current_user,
+tenant_id  UUID NOT NULL,
+FOREIGN KEY(tenant_id)
+REFERENCES tenants(tenant_id)
 );
 
 ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
@@ -92,14 +94,15 @@ GRANT ALL ON SEQUENCE songs_id_seq TO adminn;
 GRANT SELECT ON songs TO listener_free, listener_premium;
 
 -- 4. Listener profiles (multi-tenant)
-CREATE TABLE IF NOT EXISTS listener_profiles (
-    user_name    TEXT PRIMARY KEY,
-    full_name    VARCHAR(100) NOT NULL,
-    address      TEXT NOT NULL,
-    updated_at   TIMESTAMPTZ DEFAULT NOW(),
-    tenant_id    UUID NOT NULL REFERENCES tenants(id)
+CREATE TABLE listener_profiles(
+user_name     TEXT PRIMARY KEY ,
+full_name     VARCHAR(50) NOT NULL,
+address       VARCHAR(150) NOT NULL,
+updated_at    TIMESTAMPTZ DEFAULT NOW(),
+tenant_id     UUID NOT NULL,
+FOREIGN KEY(tenant_id)
+REFERENCES tenants(tenant_id)
 );
-
 ALTER TABLE listener_profiles ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_listener_profiles ON listener_profiles FOR ALL
@@ -113,15 +116,20 @@ CREATE POLICY own_profile ON listener_profiles FOR ALL
 GRANT SELECT, INSERT, UPDATE ON listener_profiles TO listener_free, listener_premium;
 
 -- 5. Premium subscriptions (multi-tenant)
-CREATE TABLE IF NOT EXISTS premium_subscriptions (
-    user_name        TEXT PRIMARY KEY REFERENCES listener_profiles(user_name),
-    amount           NUMERIC(10,2) DEFAULT 99.99,
-    payment_status   TEXT DEFAULT 'completed',
-    subscribed_at    TIMESTAMPTZ DEFAULT NOW(),
-    expires_at       TIMESTAMPTZ,
-    added_by         TEXT DEFAULT current_user,
-    tenant_id        UUID NOT NULL REFERENCES tenants(id)
+CREATE TABLE premium_subscription(
+user_name    TEXT,
+amount       NUMERIC(10,2) DEFAULT 99.99,
+payment_status  TEXT DEFAULT'completed',
+subscribed_at  TIMESTAMPTZ DEFAULT NOW(),
+expired_at     TIMESTAMPTZ,
+added_by       TEXT DEFAULT current_user,
+tenant_id      UUID NOT NULL,
+FOREIGN KEY(user_name)
+REFERENCES listener_profiles(user_name),
+FOREIGN KEY(tenant_id)
+REFERENCES tenants(tenant_id)
 );
+
 
 ALTER TABLE premium_subscriptions ENABLE ROW LEVEL SECURITY;
 
@@ -218,4 +226,5 @@ $$;
 
 -- Function grants
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
+
 
