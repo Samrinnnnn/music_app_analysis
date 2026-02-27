@@ -151,18 +151,20 @@ GRANT SELECT, INSERT, UPDATE ON premium_subscriptions TO listener_free, listener
 -- 6. Functions (tenant-aware)
 
 CREATE OR REPLACE FUNCTION get_avg_rating_per_genre()
-RETURNS TABLE (genre_name VARCHAR, avg_rating NUMERIC)
-LANGUAGE plpgsql AS $$
+RETURNS TABLE (genre_name VARCHAR, average_rating NUMERIC)
+LANGUAGE plpgsql
+AS $$
 BEGIN
     RETURN QUERY
-    SELECT genre, ROUND(AVG(rating), 1)
-    FROM songs
-    WHERE added_by = current_user
-      AND tenant_id = current_setting('app.current_tenant')::uuid
-    GROUP BY genre
-    ORDER BY avg_rating DESC;
+        SELECT genre, ROUND(AVG(rating), 1) AS average_rating
+        FROM songs
+        WHERE added_by = current_user
+          AND tenant_id = current_setting('app.current_tenant')::uuid
+        GROUP BY genre
+        ORDER BY average_rating DESC;
 END;
 $$;
+
 
 CREATE OR REPLACE FUNCTION listener_genre_counts()
 RETURNS TABLE (genre_name VARCHAR, song_count BIGINT)
@@ -244,5 +246,6 @@ CREATE INDEX idx_subtenant_user ON premium_subscription(tenant_id,user_name);
 SELECT tablename, indexname FROM pg_indexes 
 WHERE schemaname = 'public' 
 ORDER BY tablename;
+
 
 
