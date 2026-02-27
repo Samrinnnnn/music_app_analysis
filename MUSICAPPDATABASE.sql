@@ -228,3 +228,10 @@ $$;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
 
 
+--INDEX--
+
+CREATE INDEX idx_tenants_song ON songs(tenant_id);
+CREATE INDEX idx_added_by ON songs(added_by,tenant_id);
+
+
+
