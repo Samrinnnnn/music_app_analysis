@@ -28,14 +28,19 @@ GRANT CONNECT ON DATABASE appformusic TO appuser, adminn, listener_free, listene
 GRANT USAGE ON SCHEMA public TO appuser, adminn, listener_free, listener_premium;
 
 -- 2.1 Tenants table
-DROP TABLE IF EXISTS tenants CASCADE;
 CREATE TABLE tenants (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        VARCHAR(120) NOT NULL,
-    slug        VARCHAR(60)  UNIQUE NOT NULL,
-    created_at  TIMESTAMPTZ DEFAULT NOW(),
-    is_active   BOOLEAN DEFAULT TRUE
+tenant_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+name        VARCHAR(120) NOT NULL,
+location    VARCHAR(150) NOT NULL,
+created_at  TIMESTAMPTZ  DEFAULT NOW(),
+is_active   BOOLEAN DEFAULT TRUE
 );
+
+INSERT INTO tenants(name,location) VALUES
+('RK Production', 'USA'),
+('World SONG', 'UK'),
+('Nepal Heart', 'Nepal');
+
 
 ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
 
@@ -239,4 +244,5 @@ CREATE INDEX idx_subtenant_user ON premium_subscription(tenant_id,user_name);
 SELECT tablename, indexname FROM pg_indexes 
 WHERE schemaname = 'public' 
 ORDER BY tablename;
+
 
