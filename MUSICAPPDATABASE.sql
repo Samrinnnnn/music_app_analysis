@@ -231,6 +231,28 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+--top_leaderboard--
+CREATE FUNCTION top_leaderboard()
+RETURNS table(
+uploader   CHAR,
+total_songs     bigint,
+rank          bigint,
+tenants_name    CHAR
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+SELECT s.added_by,count(s.song_id),rank()over(order by count(s.song_id)DESC),t.name
+FROM songs s
+JOIN tenants t ON s.tenant_id=t.tenant_id
+where s.tenant_id=current_setting('app.current_tenant')::uuid
+GROUP BY s.added_by
+ORDER BY rank;
+END;
+$$;
+
+
+
 -- Function grants
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
 
@@ -246,6 +268,7 @@ CREATE INDEX idx_subtenant_user ON premium_subscription(tenant_id,user_name);
 SELECT tablename, indexname FROM pg_indexes 
 WHERE schemaname = 'public' 
 ORDER BY tablename;
+
 
 
 
