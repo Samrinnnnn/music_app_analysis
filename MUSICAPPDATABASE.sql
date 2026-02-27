@@ -50,8 +50,14 @@ CREATE POLICY admin_manage_tenants ON tenants
 GRANT ALL ON tenants TO adminn;
 
 -- 2.2 Helper to set current tenant
+DROP FUNCTION IF EXISTS set_app_current_tenant(UUID);
+
 CREATE OR REPLACE FUNCTION set_app_current_tenant(p_tenant_id UUID)
-RETURNS VOID LANGUAGE sql AS $$
+RETURNS VOID
+LANGUAGE sql
+SECURITY DEFINER          -- ← add this (helps in some permission scenarios)
+SET search_path = public  -- ← sometimes fixes visibility
+AS $$
     SELECT set_config('app.current_tenant', p_tenant_id::text, true);
 $$;
 
@@ -268,6 +274,7 @@ CREATE INDEX idx_subtenant_user ON premium_subscription(tenant_id,user_name);
 SELECT tablename, indexname FROM pg_indexes 
 WHERE schemaname = 'public' 
 ORDER BY tablename;
+
 
 
 
