@@ -232,6 +232,5 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_fre
 
 CREATE INDEX idx_tenants_song ON songs(tenant_id);
 CREATE INDEX idx_added_by ON songs(added_by,tenant_id);
-
-
-
+CREATE INDEX idx_tenants_user ON listener_profiles(tenant_id,user_name);
+CREATE INDEX idx_subtenant_user ON premium_subscription(tenant_id,user_name);
