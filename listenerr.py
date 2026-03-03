@@ -27,18 +27,26 @@ DB_CONFIG = {
 }
 
 def connect():
-    try:
+   try:
         conn = psycopg2.connect(**DB_CONFIG)
         conn.autocommit = True
 
         print(f"Connected as {DB_USER}")
 
         with conn.cursor() as cur:
-            cur.execute("SELECT set_app_current_tenant(%s)", (DB_TENANT_ID,))
-            cur.execute("SHOW app.current_tenant;")
-            print(f"→ Tenant: {cur.fetchone()[0]}")
+            cur.execute("""
+                SELECT set_config('app.current_tenant', %s, false);
+            """, (DB_TENANT_ID,))
 
+            # Optional: quick silent check
+            cur.execute("SELECT current_setting('app.current_tenant');")
+            tenant_set = cur.fetchone()[0]
+            if tenant_set != DB_TENANT_ID:
+                print(f"Warning: Tenant mismatch! Expected {DB_TENANT_ID}, got {tenant_set}")
+
+        print(f"→ Tenant set: {DB_TENANT_ID[:8]}...")
         return conn
+
     except PsycopgError as e:
         print(f"Connection / tenant setup failed: {e}")
         raise
@@ -420,3 +428,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
