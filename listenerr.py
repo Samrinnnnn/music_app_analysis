@@ -176,6 +176,30 @@ def plot_genre_avg(data):
     plt.show()
     print(f"Chart saved as: {filename}")
 
+def show_top_uploaders_leaderboard(conn):
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM top_leaderboard()")
+            rows = cur.fetchall()
+
+        if not rows:
+            print("No uploaders found in this tenant yet.")
+            return
+
+        print("\n=== Top Uploaders Leaderboard ===")
+        print(f"{'Rank':<6} {'Uploader':<20} {'Songs':<8} {'Tenant':<25}")
+        print("-" * 65)
+
+        for row in rows:
+            uploader, songs, rank, tenant = row
+            print(f"{rank:<6} {uploader:<20} {songs:<8} {tenant:<25}")
+
+    except PsycopgError as e:
+        #CLEAN HANDLING
+        if "permission denied" in str(e).lower():
+            print("Permission denied.")
+        else:
+            print("Something went wrong.")
 
 def show_songs_for_listeners(conn):
     try:
@@ -428,4 +452,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
