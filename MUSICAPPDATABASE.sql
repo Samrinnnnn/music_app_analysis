@@ -1,33 +1,34 @@
--- 1. Create roles
+--CREATE ROLE--
 DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'appuser') THEN
-        CREATE ROLE appuser WITH LOGIN PASSWORD 'pass123';
-    END IF;
-END $$;
+ IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='appuser')THEN
+ CREATE ROLE appuser WITH LOGIN PASSWORD 'pass123';
+ END IF;
+ END $$;
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'adminn') THEN
-        CREATE ROLE adminn WITH LOGIN PASSWORD 'admin123' BYPASSRLS;
-    END IF;
-END $$;
+ DO $$ BEGIN
+ IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='adminn')THEN
+ CREATE ROLE adminn WITH LOGIN PASSWORD 'admin123' BYPASSRLS;
+ END IF;
+ END $$;
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'listener_free') THEN
-        CREATE ROLE listener_free WITH LOGIN PASSWORD 'free123' NOSUPERUSER NOCREATEDB NOCREATEROLE;
-    END IF;
-END $$;
+ DO $$ BEGIN
+ IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='listener_free') THEN
+ CREATE ROLE listener_free WITH LOGIN PASSWORD 'free123' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+ END IF;
+ END $$;
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'listener_premium') THEN
-        CREATE ROLE listener_premium WITH LOGIN PASSWORD 'premium456' NOSUPERUSER NOCREATEDB NOCREATEROLE;
-    END IF;
-END $$;
+ DO $$ BEGIN
+ IF NOT EXISTS(SELECT FROM pg_roles WHERE rolname='listener_premium') THEN
+ CREATE ROLE listener_premium WITH LOGIN PASSWORD 'premium_123' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+ END IF;
+ END $$;
 
--- 2. Basic permissions
-GRANT CONNECT ON DATABASE appformusic TO appuser, adminn, listener_free, listener_premium;
-GRANT USAGE ON SCHEMA public TO appuser, adminn, listener_free, listener_premium;
+ --BASIC PERMISSION
+ GRANT CONNECT ON DATABASE backup TO appuser,adminn,listener_free,listener_premium;
+GRANT USAGE ON SCHEMA public TO appuser,adminn,listener_free,listener_premium;
 
--- 2.1 Tenants table
+--TABLE--
+ --1.Tenants table
 CREATE TABLE tenants (
 tenant_id   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 name        VARCHAR(120) NOT NULL,
@@ -41,31 +42,7 @@ INSERT INTO tenants(name,location) VALUES
 ('World SONG', 'UK'),
 ('Nepal Heart', 'Nepal');
 
-
-ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY admin_manage_tenants ON tenants
-    FOR ALL USING (current_user = 'adminn') WITH CHECK (current_user = 'adminn');
-
-GRANT ALL ON tenants TO adminn;
-
--- 2.2 Helper to set current tenant
-DROP FUNCTION IF EXISTS set_app_current_tenant(UUID);
-
-CREATE OR REPLACE FUNCTION set_app_current_tenant(p_tenant_id UUID)
-RETURNS VOID
-LANGUAGE sql
-SECURITY DEFINER          -- ← add this (helps in some permission scenarios)
-SET search_path = public  -- ← sometimes fixes visibility
-AS $$
-    SELECT set_config('app.current_tenant', p_tenant_id::text, true);
-$$;
-
-GRANT EXECUTE ON FUNCTION set_app_current_tenant(UUID)
-    TO appuser, adminn, listener_free, listener_premium;
-
--- 3. Songs (multi-tenant)
-DROP TABLE IF EXISTS songs CASCADE;
+--2.song table
 CREATE TABLE songs(
 song_id  SERIAL PRIMARY KEY,
 title    VARCHAR(150) NOT NULL,
@@ -78,33 +55,7 @@ tenant_id  UUID NOT NULL,
 FOREIGN KEY(tenant_id)
 REFERENCES tenants(tenant_id)
 );
-
-ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
-
--- Tenant isolation (strongest rule — must come first)
-CREATE POLICY tenant_isolation_songs ON songs FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant')::uuid)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
-
--- Owner rules (within tenant)
-CREATE POLICY song_owner ON songs FOR ALL
-    USING (added_by = current_user AND tenant_id = current_setting('app.current_tenant')::uuid)
-    WITH CHECK (added_by = current_user AND tenant_id = current_setting('app.current_tenant')::uuid);
-
--- Listener access (within tenant)
-CREATE POLICY listener_free_songs ON songs FOR SELECT
-    USING (current_user = 'listener_free' AND is_premium = FALSE AND tenant_id = current_setting('app.current_tenant')::uuid);
-
-CREATE POLICY listener_premium_songs ON songs FOR SELECT
-    USING (current_user = 'listener_premium' AND tenant_id = current_setting('app.current_tenant')::uuid);
-
-GRANT SELECT, INSERT, UPDATE ON songs TO appuser;
-GRANT USAGE, SELECT ON SEQUENCE songs_id_seq TO appuser;
-GRANT ALL ON songs TO adminn;
-GRANT ALL ON SEQUENCE songs_id_seq TO adminn;
-GRANT SELECT ON songs TO listener_free, listener_premium;
-
--- 4. Listener profiles (multi-tenant)
+--3.listener profiles table
 CREATE TABLE listener_profiles(
 user_name     TEXT PRIMARY KEY ,
 full_name     VARCHAR(50) NOT NULL,
@@ -114,19 +65,7 @@ tenant_id     UUID NOT NULL,
 FOREIGN KEY(tenant_id)
 REFERENCES tenants(tenant_id)
 );
-ALTER TABLE listener_profiles ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY tenant_listener_profiles ON listener_profiles FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant')::uuid)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
-
-CREATE POLICY own_profile ON listener_profiles FOR ALL
-    USING (user_name = current_user AND tenant_id = current_setting('app.current_tenant')::uuid)
-    WITH CHECK (user_name = current_user AND tenant_id = current_setting('app.current_tenant')::uuid);
-
-GRANT SELECT, INSERT, UPDATE ON listener_profiles TO listener_free, listener_premium;
-
--- 5. Premium subscriptions (multi-tenant)
+--4.premium subscription table
 CREATE TABLE premium_subscription(
 user_name    TEXT,
 amount       NUMERIC(10,2) DEFAULT 99.99,
@@ -140,61 +79,111 @@ REFERENCES listener_profiles(user_name),
 FOREIGN KEY(tenant_id)
 REFERENCES tenants(tenant_id)
 );
+----------RLS POLICY---
+--TENANTS--
+SELECT *FROM tenants;
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+CREATE POLICY admin_manage_tenants ON tenants
+FOR ALL USING (current_user ='adminn') WITH CHECK (current_user ='adminn');
 
+GRANT ALL ON tenants to adminn;
 
-ALTER TABLE premium_subscriptions ENABLE ROW LEVEL SECURITY;
+--SONGS--
+ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
+--1.ISOLATION POLICY--
+CREATE POLICY tenants_isolation_songs ON songs FOR ALL
+USING (tenant_id=current_setting('app.current_tenant')::uuid)
+WITH CHECK(tenant_id=current_setting('app.current_tenant')::uuid);
+--2.owner's rules
+CREATE POLICY songs_owner ON songs FOR ALL
+USING(added_by= current_user AND tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK(added_by= current_user AND tenant_id =current_setting('app.current_tenant')::uuid);
+--3.Listener's rules
+CREATE POLICY listener_free_songs ON songs FOR SELECT
+USING(current_user='listener_free' AND is_premium=FALSE AND tenant_id=current_setting('app.current_tenant')::uuid );
+CREATE POLICY listener_premium_songs ON songs FOR SELECT
+USING(current_user ='listener_premium' AND  tenant_id=current_setting('app.current_tenant')::uuid);
+-----------------------GRANT----------------------------------------
+GRANT SELECT,INSERT,UPDATE ON songs TO appuser;
+GRANT USAGE, SELECT ON SEQUENCE songs_song_id_seq TO appuser;
+GRANT ALL ON songs TO adminn;
+GRANT ALL ON SEQUENCE songs_song_id_seq TO adminn;
+GRANT SELECT ON songs TO listener_free,listener_premium;
+--LISTENER PROFILES--
+ALTER TABLE listener_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY tenant_subscriptions ON premium_subscriptions FOR ALL
-    USING (tenant_id = current_setting('app.current_tenant')::uuid)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+CREATE POLICY tenant_listener_profiles ON listener_profiles FOR ALL
+USING (tenant_id=current_setting('app.current_tenant')::uuid)
+WITH CHECK(tenant_id=current_setting('app.current_tenant')::uuid);
 
-CREATE POLICY own_subscription ON premium_subscriptions FOR ALL
-    USING (user_name = current_user AND tenant_id = current_setting('app.current_tenant')::uuid)
-    WITH CHECK (user_name = current_user AND tenant_id = current_setting('app.current_tenant')::uuid);
+CREATE POLICY own_profile ON listener_profiles FOR ALL
+USING (user_name =current_user AND tenant_id=current_setting('app.current_tenant')::uuid)
+WITH CHECK(user_name=current_user AND tenant_id=current_setting('app.current_tenant')::uuid);
+-------------------GRANT---------
+GRANT SELECT,INSERT,UPDATE ON listener_profiles TO listener_free,listener_premium;
+------PREMIUM SUBSCRIPTION------
+ALTER TABLE premium_subscription ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_subscription ON premium_subscription FOR ALL
+USING(tenant_id=current_setting('app.current_tenant')::uuid)
+WITH CHECK(tenant_id=current_setting('app.current_tenant')::uuid);
 
-GRANT SELECT, INSERT, UPDATE ON premium_subscriptions TO listener_free, listener_premium;
+CREATE POLICY own_tenant_subscription ON premium_subscription FOR ALL
+USING(user_name= current_user AND tenant_id=current_setting('app.current_tenant')::uuid)
+WITH CHECK(user_name=current_user AND tenant_id=current_setting('app.current_tenant')::uuid);
+---------------GRANT---------------------------
+GRANT SELECT, INSERT, UPDATE ON premium_subscription TO listener_free,listener_premium;
 
--- 6. Functions (tenant-aware)
+---------------------------------------FUNCTION------------------------------------------------------
+--1.set_app_current_tenant
+CREATE OR REPLACE FUNCTION set_app_current_tenant(p_tenant_id UUID)
+RETURNS VOID 
+LANGUAGE sql
+AS $$
+SELECT set_config('app.current_tenant', p_tenant_id::text,true);
+$$;
 
+GRANT EXECUTE ON FUNCTION set_app_current_tenant(UUID)
+TO appuser,adminn,listener_free,listener_premium;
+--2.get_avg_rating_per_genre
 CREATE OR REPLACE FUNCTION get_avg_rating_per_genre()
 RETURNS TABLE (genre_name VARCHAR, average_rating NUMERIC)
 LANGUAGE plpgsql
 AS $$
 BEGIN
     RETURN QUERY
-        SELECT genre, ROUND(AVG(rating), 1) AS average_rating
+        SELECT genre, ROUND(AVG(rating), 1)
         FROM songs
-        WHERE added_by = current_user
-          AND tenant_id = current_setting('app.current_tenant')::uuid
+        WHERE tenant_id = current_setting('app.current_tenant')::uuid
         GROUP BY genre
-        ORDER BY average_rating DESC;
+        ORDER BY 2 DESC;
 END;
 $$;
-
-
+---3.listener genre counts
 CREATE OR REPLACE FUNCTION listener_genre_counts()
-RETURNS TABLE (genre_name VARCHAR, song_count BIGINT)
-LANGUAGE sql SECURITY DEFINER AS $$
-    SELECT genre, COUNT(*)
-    FROM songs
-    WHERE tenant_id = current_setting('app.current_tenant')::uuid
-    GROUP BY genre HAVING COUNT(*) > 0
-    ORDER BY COUNT(*) DESC;
+RETURNS TABLE(genre_name VARCHAR,song_count BIGINT )
+LANGUAGE sql SECURITY DEFINER 
+AS $$
+SELECT genre,COUNT(*)
+FROM songs
+WHERE tenant_id=current_setting('app.current_tenant')::uuid
+GROUP BY genre HAVING COUNT(*) >0
+ORDER BY COUNT(*) DESC;
 $$;
-
-CREATE OR REPLACE FUNCTION premium_recommendations(limit_count INT DEFAULT 6)
-RETURNS TABLE (title VARCHAR, artist VARCHAR, genre VARCHAR, rating NUMERIC, is_premium BOOLEAN)
-LANGUAGE sql SECURITY DEFINER AS $$
-    SELECT title, artist, genre, rating, is_premium
-    FROM songs
-    WHERE is_premium = TRUE
-      AND rating IS NOT NULL
-      AND tenant_id = current_setting('app.current_tenant')::uuid
-    ORDER BY rating DESC, RANDOM()
-    LIMIT limit_count;
+----4.premium_recommendation
+CREATE OR REPLACE FUNCTION premium_recommendation(limit_count INT DEFAULT 6)
+RETURNS TABLE(title VARCHAR,artist VARCHAR, genre VARCHAR, rating NUMERIC, is_premium BOOLEAN)
+LANGUAGE SQL SECURITY DEFINER
+AS $$
+SELECT title,artist,genre,rating, is_premium
+FROM songs
+where is_premium=TRUE
+AND rating IS NOT NULL
+AND tenant_id=current_setting('app.current_tenant')::uuid
+ORDER BY rating DESC, RANDOM()
+LIMIT limit_count;
 $$;
-
-CREATE OR REPLACE FUNCTION get_listener_profile()
+--5.get_listener_profiles
+CREATE OR REPLACE FUNCTION get_listener_profiles()
 RETURNS TABLE (full_name VARCHAR(100), address TEXT)
 LANGUAGE sql AS $$
     SELECT full_name, address
@@ -202,7 +191,7 @@ LANGUAGE sql AS $$
     WHERE user_name = current_user
       AND tenant_id = current_setting('app.current_tenant')::uuid;
 $$;
-
+--6.update_listener_profile
 CREATE OR REPLACE FUNCTION update_listener_profile(
     p_full_name VARCHAR(100),
     p_address   TEXT
@@ -221,7 +210,7 @@ EXCEPTION WHEN OTHERS THEN
     RETURN 'Error: ' || SQLERRM;
 END;
 $$;
-
+--7.subscribe_to_premium
 CREATE OR REPLACE FUNCTION subscribe_to_premium()
 RETURNS TEXT LANGUAGE plpgsql AS $$
 BEGIN
@@ -236,46 +225,78 @@ EXCEPTION WHEN OTHERS THEN
     RETURN 'Error: ' || SQLERRM;
 END;
 $$;
-
---top_leaderboard--
-CREATE FUNCTION top_leaderboard()
-RETURNS table(
-uploader   CHAR,
-total_songs     bigint,
-rank          bigint,
-tenants_name    CHAR
+--8.Top leaderboard
+CREATE OR REPLACE FUNCTION top_leaderboard()
+RETURNS TABLE(
+    uploader TEXT,
+    total_songs BIGINT,
+    rank BIGINT,
+    tenants_name TEXT
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
-SELECT s.added_by,count(s.song_id),rank()over(order by count(s.song_id)DESC),t.name
-FROM songs s
-JOIN tenants t ON s.tenant_id=t.tenant_id
-where s.tenant_id=current_setting('app.current_tenant')::uuid
-GROUP BY s.added_by
-ORDER BY rank;
+    RETURN QUERY
+    SELECT 
+        s.added_by,
+        COUNT(s.song_id),
+        RANK() OVER (ORDER BY COUNT(s.song_id) DESC),
+        t.name::TEXT   --  CAST FIX
+    FROM songs s
+    JOIN tenants t 
+         ON s.tenant_id = t.tenant_id
+    WHERE s.tenant_id = current_setting('app.current_tenant')::uuid
+    GROUP BY s.added_by, t.name
+    ORDER BY 3;
 END;
 $$;
-
-
-
--- Function grants
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
-
-
---INDEX--
+---------------------------------------Index-------------------------------------------------------------
+SELECT *FROM tenants;
 
 CREATE INDEX idx_tenants_song ON songs(tenant_id);
 CREATE INDEX idx_added_by ON songs(added_by,tenant_id);
+
 CREATE INDEX idx_tenants_user ON listener_profiles(tenant_id,user_name);
 CREATE INDEX idx_subtenant_user ON premium_subscription(tenant_id,user_name);
 
---FIND index applied--
+CREATE INDEX idx_song_search
+ON songs (tenant_id, title, artist);
+
 SELECT tablename, indexname FROM pg_indexes 
 WHERE schemaname = 'public' 
 ORDER BY tablename;
+-- This creates the variable for your current session
+SELECT set_config('app.current_tenant', '006b1b19-c1bc-489f-902b-f7aa1034b244', false);
+SELECT *FROM songs ;
+
+SELECT *
+FROM songs
+WHERE tenant_id = current_setting('app.current_tenant')::uuid
+AND title ILIKE 's%';
+ALTER DATABASE backup
+SET app.current_tenant = '';
+SELECT *
+FROM songs
+WHERE tenant_id = current_setting('app.current_tenant')::uuid;
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
