@@ -298,7 +298,8 @@ ORDER BY 1 DESC;
 SELECT current_timestamp-query_start AS runtime,datname,usename,query FROM pg_stat_activity
 WHERE state='active' 
 ORDER BY 1 DESC;
-
+----------------------------pid---------------
+SELECT pid,datname,usename,state,query FROM pg_stat_activity;
 
 
 
