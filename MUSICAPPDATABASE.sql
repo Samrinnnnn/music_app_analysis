@@ -282,12 +282,22 @@ SELECT *
 FROM songs
 WHERE tenant_id = current_setting('app.current_tenant')::uuid;
 
-
-
-
-
-
-
+-----------------------------LONG RUNNING QUERIES----------------------
+SELECT *FROM pg_stat_activity ;
+SELECT *FROM pg_stat_activity WHERE state='idle';
+SELECT *FROM pg_stat_activity WHERE state='active';
+------------------current_timestamp for '5 min'-------------
+SELECT current_timestamp-query_start AS  runtime,datname,usename,query FROM pg_stat_activity
+WHERE state='active' AND current_timestamp-query_start> '5 mins'
+ORDER BY 1 DESC;
+-----------------current_timestamp for '30 min'--------------
+SELECT current_timestamp-query_start AS runtime,datname,usename,query FROM pg_stat_activity
+WHERE state='active' AND current_timestamp-query_start> '30 mins'
+ORDER BY 1 DESC;
+-----------------------------active state------------
+SELECT current_timestamp-query_start AS runtime,datname,usename,query FROM pg_stat_activity
+WHERE state='active' 
+ORDER BY 1 DESC;
 
 
 
