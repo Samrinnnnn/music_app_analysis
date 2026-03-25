@@ -274,14 +274,13 @@ SELECT *
 FROM songs
 WHERE tenant_id = current_setting('app.current_tenant')::uuid
 AND title ILIKE 's%';
+
+
 ALTER DATABASE backup
 SET app.current_tenant = '';
 SELECT *
 FROM songs
 WHERE tenant_id = current_setting('app.current_tenant')::uuid;
-
-
-
 
 
 
