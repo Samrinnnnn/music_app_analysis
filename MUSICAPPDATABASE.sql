@@ -250,6 +250,49 @@ BEGIN
     ORDER BY 3;
 END;
 $$;
+--9.add_song--------------------------
+CREATE OR REPLACE FUNCTION add_song(
+    p_title      VARCHAR(150),
+    p_artist     VARCHAR(50),
+    p_genre      VARCHAR(60),
+    p_rating     NUMERIC(3,1) DEFAULT NULL,
+    p_is_premium BOOLEAN DEFAULT FALSE
+)
+RETURNS TEXT 
+LANGUAGE plpgsql 
+-- SECURITY DEFINER is removed on purpose
+AS $$
+DECLARE
+    v_tenant_id UUID;
+BEGIN
+    -- Safely get tenant_id
+    v_tenant_id := current_setting('app.current_tenant', true)::UUID;
+
+    IF v_tenant_id IS NULL THEN
+        RETURN 'ERROR: Tenant not set. Please call set_config first.';
+    END IF;
+
+    -- Insert with correct added_by = current_user (the actual caller)
+    INSERT INTO songs (title, artist, genre, rating, is_premium, tenant_id, added_by)
+    VALUES (
+        p_title, 
+        p_artist, 
+        p_genre, 
+        p_rating, 
+        p_is_premium, 
+        v_tenant_id, 
+        current_user                     -- This will be 'listener_free', 'appuser', etc.
+    );
+
+    RETURN 'SUCCESS: Song "' || p_title || '" added by ' || current_user || '.';
+
+EXCEPTION 
+    WHEN OTHERS THEN
+        RETURN 'ERROR: ' || SQLERRM;
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
+GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
 ---------------------------------------Index-------------------------------------------------------------
 SELECT *FROM tenants;
