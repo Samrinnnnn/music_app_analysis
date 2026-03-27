@@ -301,6 +301,11 @@ ORDER BY 1 DESC;
 ----------------------------pid---------------
 SELECT pid,datname,usename,state,query FROM pg_stat_activity;
 
+---------------------------DROP POLICY----------------------------
+DROP POLICY IF EXISTS tenants_isolation_songs ON songs;
+DROP POLICY IF EXISTS songs_owner ON songs;
+DROP POLICY IF EXISTS listener_free_songs ON songs;
+DROP POLICY IF EXISTS listener_premium_songs ON songs;
 
 
 
