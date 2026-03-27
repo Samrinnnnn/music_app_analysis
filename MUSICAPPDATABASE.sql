@@ -330,5 +330,8 @@ FOR SELECT
 USING(current_user='listener_premium'
  AND tenant_id=current_setting('app.current_tenant')::uuid);
 
-
- 
+--------------------VIEW POLICY-------------
+ SELECT policyname,permissive,cmd,roles
+FROM pg_policies
+WHERE tablename= 'songs'
+ORDER BY policyname;
