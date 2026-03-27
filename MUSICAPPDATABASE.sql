@@ -307,11 +307,28 @@ DROP POLICY IF EXISTS songs_owner ON songs;
 DROP POLICY IF EXISTS listener_free_songs ON songs;
 DROP POLICY IF EXISTS listener_premium_songs ON songs;
 
+-----------------RESTRICTIVE POLICY FOR tenants_isolation_songs--------------
+CREATE POLICY tenants_isolation_songs ON songs
+AS RESTRICTIVE
+FOR ALL
+USING(tenant_id=current_setting('app.current_tenant')::uuid)
+WITH CHECK(tenant_id=current_setting('app.current_tenant')::uuid);
 
+CREATE POLICY songs_owner ON songs
+FOR ALL
+USING(added_by=current_user AND tenant_id=current_setting('app.current_tenant')::uuid)
+WITH CHECK(added_by=current_user AND tenant_id=current_setting('app.current_tenant')::uuid);
 
+CREATE POLICY listener_free_songs ON songs
+FOR SELECT
+USING(current_user='listener_free'
+ AND is_premium=FALSE
+ AND tenant_id=current_setting('app.current_tenant')::uuid);
 
-
-
+CREATE POLICY listener_premium_songs ON songs
+FOR SELECT
+USING(current_user='listener_premium'
+ AND tenant_id=current_setting('app.current_tenant')::uuid);
 
 
  
