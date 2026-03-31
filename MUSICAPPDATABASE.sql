@@ -398,5 +398,19 @@ ALTER VIEW listener_songs_view SET(security_barrier=true);
 REVOKE SELECT ON songs FROM listener_free,listener_premium;
 GRANT SELECT ON listener_songs_view TO listener_free,listener_premium;
 
+---------------------TESTING-----------------------
+SET ROLE=listener_free;
+SELECT *FROM songs;
+SELECT set_config('app.current_tenant','006b1b19-c1bc-489f-902b-f7aa1034b244',FALSE);
+SELECT *FROM listener_songs_view;
+RESET ROLE;
+
+SET ROLE='listener_premium';
+SET ROLE='listener_free';
+SELECT set_config('app.current_tenant','006b1b19-c1bc-489f-902b-f7aa1034b244', FALSE);
+
+SELECT COUNT(*) AS total,
+COUNT(CASE WHEN is_premium THEN 1 END) AS premium_count
+FROM listener_songs_view;
 
 
