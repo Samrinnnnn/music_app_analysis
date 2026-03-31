@@ -378,3 +378,16 @@ USING(current_user='listener_premium'
 FROM pg_policies
 WHERE tablename= 'songs'
 ORDER BY policyname;
+
+
+------------------------------------------------COLUMN GRANT----------------------------------------------------------
+
+REVOKE ALL ON TABLE songs FROM listener_free;
+
+GRANT SELECT(id,title,artist,genre,rating,is_premium,tenant_id)
+ON TABLE songs
+TO listener_free;
+
+
+
+
