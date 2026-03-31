@@ -387,7 +387,16 @@ REVOKE ALL ON TABLE songs FROM listener_free;
 GRANT SELECT(id,title,artist,genre,rating,is_premium,tenant_id)
 ON TABLE songs
 TO listener_free;
-
+---------------------------------VIEW-----------------------------------------
+DROP VIEW IF EXISTS listener_songs_view;
+CREATE OR REPLACE VIEW listener_songs_view AS
+SELECT id,title,artist,genre,rating,is_premium,tenant_id
+FROM songs
+WHERE tenant_id=current_setting('app.current_tenant',true)::uuid
+AND(current_user!='listener_free' OR is_premium=FALSE);
+ALTER VIEW listener_songs_view SET(security_barrier=true);
+REVOKE SELECT ON songs FROM listener_free,listener_premium;
+GRANT SELECT ON listener_songs_view TO listener_free,listener_premium;
 
 
 
