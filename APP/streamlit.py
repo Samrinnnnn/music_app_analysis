@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from psycopg2.extras import DictCursor
 import datetime
 
+#THEME
 st.set_page_config(page_title="WE CAN PLAY",layout="wide",page_icon="🎵")
 st.markdown("""
 <style>
@@ -19,4 +20,3 @@ st.markdown("""
 
 st.title("🎵 WE CAN PLAY")
 st.markdown("**SONG FOR US**")
-###SIDEBAR
