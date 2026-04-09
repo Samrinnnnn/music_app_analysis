@@ -6,7 +6,7 @@ from psycopg2.extras import DictCursor
 import datetime
 
 #THEME
-st.set_page_config(page_title="WE CAN PLAY",layout="wide",page_icon="🎵")
+st.set_page_config(page_title="WE CAN PLAY",layout="centered",page_icon="🎵")
 st.markdown("""
 <style>
     .main {background-color: #121212; color: #ffffff;}
@@ -20,3 +20,8 @@ st.markdown("""
 
 st.title("🎵 WE CAN PLAY")
 st.markdown("**SONG FOR US**")
+    
+#SIDEBAR
+with st.sidebar:
+    #st.image("C:\Users\Samrin\Downloads\Cheerful music note app icon.png",width=180)
+    st.image(r"C:\Users\Samrin\Downloads\Cheerful_music_note_app_icon-removebg-preview.png", width=180)
