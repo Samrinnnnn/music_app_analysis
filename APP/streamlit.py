@@ -25,3 +25,31 @@ st.markdown("**SONG FOR US**")
 with st.sidebar:
     #st.image("C:\Users\Samrin\Downloads\Cheerful music note app icon.png",width=180)
     st.image(r"C:\Users\Samrin\Downloads\Cheerful_music_note_app_icon-removebg-preview.png", width=180)
+    st.header("Login")
+    role = st.selectbox("Select Role", ["listener_free", "listener_premium", "appuser", "adminn"])
+    tenant_id = st.text_input("Tenant ID", value="006b1b19-c1bc-489f-902b-f7aa1034b244")
+    
+    if st.button("🚀 Connect", type="primary"):
+        try:
+            pw_map = {"appuser":"pass123", "adminn":"admin123", "listener_free":"free123", "listener_premium":"premium456"}
+            conn = psycopg2.connect(dbname="backup", user=role, password=pw_map.get(role,""), host="localhost", port="5432")
+            conn.autocommit = True
+            cur = conn.cursor(cursor_factory=DictCursor)
+            cur.execute("SELECT set_config('app.current_tenant', %s, false)", (tenant_id,))
+            st.session_state.conn = conn
+            st.session_state.cur = cur
+            st.session_state.role = role
+            st.session_state.tenant_id = tenant_id
+            st.success(f"✅ Connected as **{role}**")
+        except Exception as e:
+            st.error(f"Connection failed: {e}")
+
+if "conn" not in st.session_state:
+    st.info("👈 Please login from the sidebar")
+    st.stop()
+
+conn = st.session_state.conn
+cur = st.session_state.cur
+role = st.session_state.role
+
+st.write(f"**Role:** `{role}` | **Tenant:** `{st.session_state.tenant_id[:12]}...`")
