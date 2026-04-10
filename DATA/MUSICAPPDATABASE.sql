@@ -79,6 +79,22 @@ REFERENCES listener_profiles(user_name),
 FOREIGN KEY(tenant_id)
 REFERENCES tenants(tenant_id)
 );
+--5.play_history table
+CREATE TABLE play_history(
+ history_id         SERIAL PRIMARY KEY,
+ user_name          TEXT  NOT NULL,
+ song_id            INTEGER NOT NULL,
+ played_at          TIMESTAMPTZ DEFAULT NOW(),
+ listen_duration    INTEGER CHECK (listen_duration>=0),
+ tenant_id          UUID NOT NULL,
+FOREIGN KEY(user_name)
+REFERENCES listener_profiles(user_name) ON DELETE CASCADE,
+FOREIGN KEY(song_id)
+REFERENCES songs (song_id) ON DELETE CASCADE,
+FOREIGN KEY(tenant_id)
+REFERENCES tenants (tenant_id) ON DELETE CASCADE
+ );
+ 
 ----------RLS POLICY---
 --TENANTS--
 SELECT *FROM tenants;
