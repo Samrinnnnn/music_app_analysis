@@ -291,9 +291,31 @@ EXCEPTION
         RETURN 'ERROR: ' || SQLERRM;
 END;
 $$;
+--------------10. record_song_play
+CREATE OR REPLACE FUNCTION record_song_play(p_song_id integer,p_duration integer DEFAULT NULL)
+ RETURNS TEXT AS $$
+ DECLARE
+    v_is_premium BOOLEAN;
+BEGIN 
+ SELECT is_premium INTO v_is_premium FROM songs WHERE song_id=p_song_id;
+IF current_user='listener_free' AND v_is_premium=TRUE THEN
+ RETURN "Permission Denied: Free users can't play premium songs.";
+END IF;
+INSERT INTO play_history(user_name,song_id,listen_duration,tenant_id)
+VALUES(current_user,p_song_id,p_duration,current_setting('app.current_tenant',true)::uuid);
+RETURN 'Play recorded successfully.';
+EXCEPTION
+ WHEN OTHERS THEN
+      RETURN 'Error:' || SQLERRM;
+END;
+$$ LANGUAGE plpgsql;
+ 
+ 
+
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
+GRANT EXECUTE ON FUNCTION record_song_play TO listener_free,listener_premium;
 ---------------------------------------Index-------------------------------------------------------------
 SELECT *FROM tenants;
 
