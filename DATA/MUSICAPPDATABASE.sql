@@ -326,7 +326,42 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
  
- 
+ ----------11.get_age_based_recommendations
+CREATE OR REPLACE FUNCTION get_age_based_recommendations(p_age_group TEXT DEFAULT 'all')
+ RETURNS TABLE(
+ title VARCHAR,
+ artist VARCHAR,
+ genre  VARCHAR,
+ rating NUMERIC,
+ is_premium BOOLEAN,
+ recommended_for TEXT
+ ) AS $$
+ BEGIN
+  RETURN QUERY
+  SELECT 
+   s.title,
+   s.artist,
+   s.genre,
+   s.rating,
+   s.is_premium,
+ CASE 
+  WHEN p_age_group = 'Kopila' THEN 'Kopila(Young & Energetic)'
+  WHEN p_age_group = 'Phool' THEN 'Phool(Mature)'
+  WHEN p_age_group = 'Basanta' THEN 'Basanta(Calm & Balanced)'
+ END AS recommended_for
+ FROM songs s
+ WHERE s.tenant_id=current_setting('app.current_tenant',true)::uuid
+ AND(
+     (p_age_group='Kopila' AND s.genre IN ('Pop','Hip Hop','Rock','Rap'))
+   OR(p_age_group='Phool' AND s.genre IN ('Rock', 'Bollywood', 'Love', 'Indie'))
+   OR (p_age_group = 'basanta' AND s.genre IN ('Classic', 'Folk', 'Country', 'Jazz', 'Ghazal'))
+   OR (p_age_group = 'all')
+      )
+    ORDER BY s.rating DESC, RANDOM()
+    LIMIT 10;
+END;
+$$ LANGUAGE plpgsql;
+
 
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
