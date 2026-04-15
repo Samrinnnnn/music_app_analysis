@@ -79,6 +79,22 @@ REFERENCES listener_profiles(user_name),
 FOREIGN KEY(tenant_id)
 REFERENCES tenants(tenant_id)
 );
+--5.play_history table
+CREATE TABLE play_history(
+ history_id         SERIAL PRIMARY KEY,
+ user_name          TEXT  NOT NULL,
+ song_id            INTEGER NOT NULL,
+ played_at          TIMESTAMPTZ DEFAULT NOW(),
+ listen_duration    INTEGER CHECK (listen_duration>=0),
+ tenant_id          UUID NOT NULL,
+FOREIGN KEY(user_name)
+REFERENCES listener_profiles(user_name) ON DELETE CASCADE,
+FOREIGN KEY(song_id)
+REFERENCES songs (song_id) ON DELETE CASCADE,
+FOREIGN KEY(tenant_id)
+REFERENCES tenants (tenant_id) ON DELETE CASCADE
+ );
+ 
 ----------RLS POLICY---
 --TENANTS--
 SELECT *FROM tenants;
@@ -291,9 +307,66 @@ EXCEPTION
         RETURN 'ERROR: ' || SQLERRM;
 END;
 $$;
+--------------10. record_song_play
+CREATE OR REPLACE FUNCTION record_song_play(p_song_id integer,p_duration integer DEFAULT NULL)
+ RETURNS TEXT AS $$
+ DECLARE
+    v_is_premium BOOLEAN;
+BEGIN 
+ SELECT is_premium INTO v_is_premium FROM songs WHERE song_id=p_song_id;
+IF current_user='listener_free' AND v_is_premium=TRUE THEN
+ RETURN "Permission Denied: Free users can't play premium songs.";
+END IF;
+INSERT INTO play_history(user_name,song_id,listen_duration,tenant_id)
+VALUES(current_user,p_song_id,p_duration,current_setting('app.current_tenant',true)::uuid);
+RETURN 'Play recorded successfully.';
+EXCEPTION
+ WHEN OTHERS THEN
+      RETURN 'Error:' || SQLERRM;
+END;
+$$ LANGUAGE plpgsql;
+ 
+ ----------11.get_age_based_recommendations
+CREATE OR REPLACE FUNCTION get_age_based_recommendations(p_age_group TEXT DEFAULT 'all')
+ RETURNS TABLE(
+ title VARCHAR,
+ artist VARCHAR,
+ genre  VARCHAR,
+ rating NUMERIC,
+ is_premium BOOLEAN,
+ recommended_for TEXT
+ ) AS $$
+ BEGIN
+  RETURN QUERY
+  SELECT 
+   s.title,
+   s.artist,
+   s.genre,
+   s.rating,
+   s.is_premium,
+ CASE 
+  WHEN p_age_group = 'Kopila' THEN 'Kopila(Young & Energetic)'
+  WHEN p_age_group = 'Phool' THEN 'Phool(Mature)'
+  WHEN p_age_group = 'Basanta' THEN 'Basanta(Calm & Balanced)'
+ END AS recommended_for
+ FROM songs s
+ WHERE s.tenant_id=current_setting('app.current_tenant',true)::uuid
+ AND(
+     (p_age_group='Kopila' AND s.genre IN ('Pop','Hip Hop','Rock','Rap'))
+   OR(p_age_group='Phool' AND s.genre IN ('Rock', 'Bollywood', 'Love', 'Indie'))
+   OR (p_age_group = 'basanta' AND s.genre IN ('Classic', 'Folk', 'Country', 'Jazz', 'Ghazal'))
+   OR (p_age_group = 'all')
+      )
+    ORDER BY s.rating DESC, RANDOM()
+    LIMIT 10;
+END;
+$$ LANGUAGE plpgsql;
+
+
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
+GRANT EXECUTE ON FUNCTION record_song_play TO listener_free,listener_premium;
 ---------------------------------------Index-------------------------------------------------------------
 SELECT *FROM tenants;
 
