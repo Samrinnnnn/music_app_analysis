@@ -53,3 +53,15 @@ cur = st.session_state.cur
 role = st.session_state.role
 
 st.write(f"**Role:** `{role}` | **Tenant:** `{st.session_state.tenant_id[:12]}...`")
+
+#TABS
+tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8=st.tabs([
+    "Home",
+    "🎵Browse",
+    "📊Dashboard",
+    "🏆 Top Leaderboard",
+    "🔍Search",
+    "📜 Your History", 
+    "🌸 Age Recommendations", 
+    "➕ Add Song"
+])
