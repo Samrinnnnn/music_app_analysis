@@ -450,7 +450,45 @@ CREATE OR REPLACE FUNCTION popular_artists()
  LIMIT 8;
 END;
 $$ LANGUAGE plpgsql;
+------15.user_login function
+CREATE OR REPLACE FUNCTION user_login(p_username TEXT, p_password TEXT, p_tenant_id UUID DEFAULT NULL)
+RETURNS TEXT AS $$
+DECLARE 
+ v_role_type TEXT;
+ v_tenant_id UUID;
+BEGIN
+ IF p_username='adminn'
+ THEN
+ SET ROLE adminn;
+IF p_tenant_id IS NOT NULL
+ THEN PERFORM set_config('app.current_tenant',p_tenant_id::text,false);
+END IF;
+RETURN 'Login successfully as appuser';
+END IF;
+-------------LISTENER---------
+SELECT role_type,tenant_id INTO v_role_type,v_tenant
+ FROM users
+ WHERE user_name=p_username
+ AND password_hash=p_password;
 
+IF v_role_type IS NULL THEN
+ RETURN 'Invalid username or password';
+END IF;
+
+EXECUTE format('SET ROLE %I',v_role_type);
+PERFORM set_config('app.current_tenant',v_tenant::text,false);
+
+RETURN 'Login successful as' || v_role_type;
+END;
+$$ LANGUAGE plpgsql;
+
+
+
+
+
+
+
+ 
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
