@@ -63,5 +63,15 @@ tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8=st.tabs([
     "🔍Search",
     "📜 Your History", 
     "🌸 Age Recommendations", 
-    "➕ Add Song"
+    "📋 Collaborative Playlists"
 ])
+#TAB1: HOME
+
+with tab1:
+    st.subheader("This Week's Famous Songs")
+    try:
+        cur.execute("SELECT * FROM this_week_famous()")
+        df = pd.DataFrame(cur.fetchall(), columns=["ID", "Title", "Artist", "Genre", "Rating", "Premium", "Play Count"])
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    except:
+        st.info("No data yet.")
