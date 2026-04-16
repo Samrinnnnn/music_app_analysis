@@ -409,7 +409,48 @@ CREATE OR REPLACE FUNCTION this_week_famous()
  LIMIT 12;
 END;
 $$ LANGUAGE plpgsql;
- 
+
+-----13.Popular Genres Function
+CREATE OR REPLACE FUNCTION popular_genres()
+ RETURNS TABLE(
+ genre VARCHAR,
+ song_count BIGINT,
+ avg_rating NUMERIC
+ ) AS $$
+ BEGIN
+  RETURN QUERY
+  SELECT 
+    s.genre,
+ COUNT(*) :: BIGINT AS song_count,
+ ROUND(AVG(s.rating),2) AS avg_rating
+ FROM songs s
+ WHERE s.tenant_id=current_setting('app.current_tenant',true)::uuid
+ GROUP BY s.genre
+ ORDER BY song_count DESC, avg_rating DESC
+ LIMIT 8;
+END;
+$$ LANGUAGE plpgsql;
+-----14. Popular Artists Function
+CREATE OR REPLACE FUNCTION popular_artists()
+ RETURNS TABLE(
+        artist     VARCHAR,
+        song_count  BIGINT,
+        avg_rating  NUMERIC
+ ) AS $$
+ BEGIN 
+   RETURN QUERY
+   SELECT
+       s.artist,
+       COUNT(*)::BIGINT AS song_count,
+       ROUND(AVG(s.rating),2) AS avg_rating
+ FROM songs s
+ WHERE s.tenant_id=current_setting('app.current_tenant',true)::uuid
+ GROUP BY s.artist
+ ORDER BY song_count DESC, avg_rating DESC
+ LIMIT 8;
+END;
+$$ LANGUAGE plpgsql;
+
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
