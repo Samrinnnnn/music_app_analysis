@@ -378,11 +378,85 @@ BEGIN
     LIMIT 12;
 END;
 $$ LANGUAGE plpgsql;
+
+--------12."This Week's Famous Songs" based on actual plays"-------------
+CREATE OR REPLACE FUNCTION this_week_famous()
+ RETURNS TABLE(
+   song_id    INT,
+   title      VARCHAR,
+   artist     VARCHAR,
+   genre      VARCHAR,
+   rating     NUMERIC,
+   is_premium BOOLEAN,
+   play_count BIGINT
+ ) AS $$
+ BEGIN
+      RETURN QUERY
+      SELECT
+            s.song_id,
+            s.title,
+            s.artist,
+            s.genre,
+            s.rating,
+            s.is_premium,
+            COUNT(ph.history_id):: BIGINT AS play_count
+ FROM songs s
+ LEFT JOIN play_history ph ON s.song_id=ph.song_id
+ WHERE s.tenant_id=current_setting('app.current_tenant',true)::uuid
+ AND ph.played_at >= NOW() - INTERVAL '7 days'
+ GROUP BY s.song_id,s.title,s.artist,s.genre,s.rating,s.is_premium
+ ORDER BY play_count DESC, s.rating DESC
+ LIMIT 12;
+END;
+$$ LANGUAGE plpgsql;
+
+-----13.Popular Genres Function
+CREATE OR REPLACE FUNCTION popular_genres()
+ RETURNS TABLE(
+ genre VARCHAR,
+ song_count BIGINT,
+ avg_rating NUMERIC
+ ) AS $$
+ BEGIN
+  RETURN QUERY
+  SELECT 
+    s.genre,
+ COUNT(*) :: BIGINT AS song_count,
+ ROUND(AVG(s.rating),2) AS avg_rating
+ FROM songs s
+ WHERE s.tenant_id=current_setting('app.current_tenant',true)::uuid
+ GROUP BY s.genre
+ ORDER BY song_count DESC, avg_rating DESC
+ LIMIT 8;
+END;
+$$ LANGUAGE plpgsql;
+-----14. Popular Artists Function
+CREATE OR REPLACE FUNCTION popular_artists()
+ RETURNS TABLE(
+        artist     VARCHAR,
+        song_count  BIGINT,
+        avg_rating  NUMERIC
+ ) AS $$
+ BEGIN 
+   RETURN QUERY
+   SELECT
+       s.artist,
+       COUNT(*)::BIGINT AS song_count,
+       ROUND(AVG(s.rating),2) AS avg_rating
+ FROM songs s
+ WHERE s.tenant_id=current_setting('app.current_tenant',true)::uuid
+ GROUP BY s.artist
+ ORDER BY song_count DESC, avg_rating DESC
+ LIMIT 8;
+END;
+$$ LANGUAGE plpgsql;
+
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION record_song_play TO listener_free,listener_premium;
 GRANT EXECUTE ON FUNCTION get_age_based_recommendations TO listener_free,listener_premium;
+GRANT EXECUTE ON FUNCTION this_week_famous TO listener_free, listener_premium, appuser, adminn;
 ---------------------------------------Index-------------------------------------------------------------
 SELECT *FROM tenants;
 
