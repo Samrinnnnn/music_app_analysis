@@ -327,46 +327,62 @@ END;
 $$ LANGUAGE plpgsql;
  
  ----------11.get_age_based_recommendations
-CREATE OR REPLACE FUNCTION get_age_based_recommendations(p_age_group TEXT DEFAULT 'all')
- RETURNS TABLE(
- title VARCHAR,
- artist VARCHAR,
- genre  VARCHAR,
- rating NUMERIC,
- is_premium BOOLEAN,
- recommended_for TEXT
- ) AS $$
- BEGIN
-  RETURN QUERY
-  SELECT 
-   s.title,
-   s.artist,
-   s.genre,
-   s.rating,
-   s.is_premium,
- CASE 
-  WHEN p_age_group = 'Kopila' THEN 'Kopila(Young & Energetic)'
-  WHEN p_age_group = 'Phool' THEN 'Phool(Mature)'
-  WHEN p_age_group = 'Basanta' THEN 'Basanta(Calm & Balanced)'
- END AS recommended_for
- FROM songs s
- WHERE s.tenant_id=current_setting('app.current_tenant',true)::uuid
- AND(
-     (p_age_group='Kopila' AND s.genre IN ('Pop','Hip Hop','Rock','Rap'))
-   OR(p_age_group='Phool' AND s.genre IN ('Rock', 'Bollywood', 'Love', 'Indie'))
-   OR (p_age_group = 'basanta' AND s.genre IN ('Classic', 'Folk', 'Country', 'Jazz', 'Ghazal'))
-   OR (p_age_group = 'all')
+CREATE OR REPLACE FUNCTION get_age_based_recommendations()
+RETURNS TABLE(
+    title VARCHAR,
+    artist VARCHAR,
+    genre VARCHAR,
+    rating NUMERIC,
+    is_premium BOOLEAN,
+    recommended_for TEXT
+) AS $$
+DECLARE
+    v_age INTEGER;
+    v_group TEXT;
+BEGIN
+    -- Get current logged-in user's age
+    SELECT age INTO v_age 
+    FROM users 
+    WHERE user_name = current_user;
+
+    -- Auto classify age group
+    v_group := CASE 
+        WHEN v_age IS NULL                    THEN 'all'
+        WHEN v_age BETWEEN 5 AND 25           THEN 'kopila'
+        WHEN v_age BETWEEN 26 AND 40          THEN 'phool'
+        ELSE 'basanta'
+    END;
+
+    RETURN QUERY
+    SELECT
+        s.title,
+        s.artist,
+        s.genre,
+        s.rating,
+        s.is_premium,
+        CASE 
+            WHEN v_group = 'kopila' THEN '🌱 Kopila (Young & Energetic)'
+            WHEN v_group = 'phool'  THEN '🌹 Phool (Romantic & Mature)'
+            WHEN v_group = 'basanta'THEN '🌳 Basanta (Classic & Timeless)'
+            ELSE '🎵 All Ages'
+        END AS recommended_for
+    FROM songs s
+    WHERE s.tenant_id = current_setting('app.current_tenant', true)::uuid
+      AND (
+            (v_group = 'kopila' AND s.genre IN ('Pop', 'Hip Hop', 'Rock', 'Rap'))
+         OR (v_group = 'phool'  AND s.genre IN ('Rock', 'Bollywood', 'Love', 'Indie'))
+         OR (v_group = 'basanta'AND s.genre IN ('Classic', 'Folk', 'Country', 'Jazz', 'Ghazal'))
+         OR (v_group = 'all')
       )
     ORDER BY s.rating DESC, RANDOM()
-    LIMIT 10;
+    LIMIT 12;
 END;
 $$ LANGUAGE plpgsql;
-
-
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION record_song_play TO listener_free,listener_premium;
+GRANT EXECUTE ON FUNCTION get_age_based_recommendations TO listener_free,listener_premium;
 ---------------------------------------Index-------------------------------------------------------------
 SELECT *FROM tenants;
 
