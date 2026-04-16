@@ -488,13 +488,16 @@ $$ LANGUAGE plpgsql;
 
 
 
- 
+
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO appuser, adminn, listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION record_song_play TO listener_free,listener_premium;
 GRANT EXECUTE ON FUNCTION get_age_based_recommendations TO listener_free,listener_premium;
 GRANT EXECUTE ON FUNCTION this_week_famous TO listener_free, listener_premium, appuser, adminn;
+GRANT EXECUTE ON FUNCTION user_login(TEXT,TEXT,UUID) TO app_login;
+GRANT SELECT ON users TO app_login;
+GRANT EXECUTE ON ALL FUNCTION IN SCHEMA public TO app_login;
 ---------------------------------------Index-------------------------------------------------------------
 SELECT *FROM tenants;
 
