@@ -75,3 +75,11 @@ with tab1:
         st.dataframe(df, use_container_width=True, hide_index=True)
     except:
         st.info("No data yet.")
+with tab2:
+    st.subheader("Browse All Songs")
+    try:
+        cur.execute("SELECT song_id, title, artist, genre, rating, is_premium FROM songs ORDER BY song_id DESC")
+        df = pd.DataFrame(cur.fetchall())
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.error(f"Error: {e}")
