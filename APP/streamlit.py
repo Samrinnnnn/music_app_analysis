@@ -83,3 +83,37 @@ with tab2:
         st.dataframe(df, use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"Error: {e}")
+# Tab 3: Dashboard
+# Tab 3: Dashboard (Only for adminn & appuser)
+with tab3:
+    if role in ["adminn", "appuser"]:
+        st.subheader("📊 Music Dashboard")
+        
+        st.write("### Popular Genres")
+        try:
+            cur.execute("SELECT * FROM popular_genres()")
+            dfg = pd.DataFrame(cur.fetchall(), columns=["Genre", "Song Count", "Avg Rating"])
+            st.dataframe(dfg, use_container_width=True)
+            fig = px.bar(dfg, x="Genre", y="Song Count", color="Avg Rating", title="Popular Genres")
+            st.plotly_chart(fig, use_container_width=True)
+        except:
+            st.info("Popular genres data not available yet.")
+
+        st.write("### Popular Artists")
+        try:
+            cur.execute("SELECT * FROM popular_artists()")
+            dfa = pd.DataFrame(cur.fetchall(), columns=["Artist", "Song Count", "Avg Rating"])
+            st.dataframe(dfa, use_container_width=True)
+        except:
+            pass
+
+        st.write("### Song Rating vs Listener Count")
+        try:
+            cur.execute("SELECT title, rating, listener_count FROM song_listener_stats LIMIT 20")
+            dfs = pd.DataFrame(cur.fetchall(), columns=["Title", "Rating", "Listener Count"])
+            fig = px.scatter(dfs, x="Rating", y="Listener Count", text="Title", title="Song Popularity", color="Rating")
+            st.plotly_chart(fig, use_container_width=True)
+        except:
+            st.info("Scatterplot data not available yet.")
+    else:
+        st.info("Dashboard is visible only to adminn and appuser.")
