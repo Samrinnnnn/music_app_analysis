@@ -106,19 +106,26 @@ GRANT ALL ON tenants to adminn;
 
 --SONGS--
 ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
---1.ISOLATION POLICY--
-CREATE POLICY tenants_isolation_songs ON songs FOR ALL
-USING (tenant_id=current_setting('app.current_tenant')::uuid)
-WITH CHECK(tenant_id=current_setting('app.current_tenant')::uuid);
---2.owner's rules
-CREATE POLICY songs_owner ON songs FOR ALL
-USING(added_by= current_user AND tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK(added_by= current_user AND tenant_id =current_setting('app.current_tenant')::uuid);
---3.Listener's rules
-CREATE POLICY listener_free_songs ON songs FOR SELECT
-USING(current_user='listener_free' AND is_premium=FALSE AND tenant_id=current_setting('app.current_tenant')::uuid );
-CREATE POLICY listener_premium_songs ON songs FOR SELECT
-USING(current_user ='listener_premium' AND  tenant_id=current_setting('app.current_tenant')::uuid);
+--DROPPING POLICIES
+ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenants_isolation_songs ON songs;
+DROP POLICY IF EXISTS songs_owner ON songs;
+DROP POLICY IF EXISTS listener_free_songs ON songs;
+--1.songs_tenant_isolation
+CREATE POLICY songs_tenant_isolation ON songs AS RESTRICTIVE
+FOR ALL USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+--2. songs_appuser
+CREATE POLICY songs_appuser ON songs TO appuser 
+USING (tenant_id = current_setting('app.current_tenant')::uuid)
+WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+--3.songs_admin
+CREATE POLICY songs_admin ON songs TO adminn USING (true);
+--4.songs_listener_all
+CREATE POLICY songs_listener_all ON songs FOR SELECT 
+TO listener_free, listener_premium USING (true);
+
+ALTER TABLE songs FORCE ROW LEVEL SECURITY;
 -----------------------GRANT----------------------------------------
 GRANT SELECT,INSERT,UPDATE ON songs TO appuser;
 GRANT USAGE, SELECT ON SEQUENCE songs_song_id_seq TO appuser;
