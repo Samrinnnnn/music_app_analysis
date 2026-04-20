@@ -55,31 +55,11 @@ tenant_id  UUID NOT NULL,
 FOREIGN KEY(tenant_id)
 REFERENCES tenants(tenant_id)
 );
---3.listener profiles table
-CREATE TABLE listener_profiles(
-user_name     TEXT PRIMARY KEY ,
-full_name     VARCHAR(50) NOT NULL,
-address       VARCHAR(150) NOT NULL,
-updated_at    TIMESTAMPTZ DEFAULT NOW(),
-tenant_id     UUID NOT NULL,
-FOREIGN KEY(tenant_id)
-REFERENCES tenants(tenant_id)
-);
---4.premium subscription table
-CREATE TABLE premium_subscription(
-user_name    TEXT,
-amount       NUMERIC(10,2) DEFAULT 99.99,
-payment_status  TEXT DEFAULT'completed',
-subscribed_at  TIMESTAMPTZ DEFAULT NOW(),
-expired_at     TIMESTAMPTZ,
-added_by       TEXT DEFAULT current_user,
-tenant_id      UUID NOT NULL,
-FOREIGN KEY(user_name)
-REFERENCES listener_profiles(user_name),
-FOREIGN KEY(tenant_id)
-REFERENCES tenants(tenant_id)
-);
---5.play_history table
+--.TABLE DROP
+DROP TABLE IF EXISTS premium_subscription CASCADE;
+DROP TABLE IF EXISTS listener_profiles CASCADE;
+
+--3.play_history table
 CREATE TABLE play_history(
  history_id         SERIAL PRIMARY KEY,
  user_name          TEXT  NOT NULL,
@@ -94,7 +74,43 @@ REFERENCES songs (song_id) ON DELETE CASCADE,
 FOREIGN KEY(tenant_id)
 REFERENCES tenants (tenant_id) ON DELETE CASCADE
  );
- 
+
+--4.playlist_members
+CREATE TABLE IF NOT EXISTS playlist_members(
+ playlist_id            UUID NOT NULL,
+ user_name              TEXT NOT NULL,
+ role                   TEXT CHECK(role IN('owner','editor','viewer')) NOT NULL DEFAULT 'viewer',
+ tenant_id              UUID NOT NULL,
+ added_at               TIMESTAMPTZ DEFAULT NOW(),
+ PRIMARY KEY(playlist_id,user_name),
+ FOREIGN KEY(tenant_id)
+ REFERENCES tenants(tenant_id) ON DELETE CASCADE
+ );
+
+--5.playlists
+CREATE TABLE IF NOT EXISTS playlists(
+ playlist_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+ name                   VARCHAR(100) NOT NULL,
+ description            TEXT,
+ is_public              BOOLEAN DEFAULT FALSE,
+ tenant_id              UUID NOT NULL,
+ created_by             TEXT NOT NULL DEFAULT current_user,
+ created_at             TIMESTAMPTZ DEFAULT NOW(),
+ FOREIGN KEY(tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
+ );
+
+--6.users
+CREATE TABLE users(
+ user_name          TEXT PRIMARY KEY,
+ full_name          VARCHAR(50) NOT NULL,
+ age                INT CHECK (age>=5 AND age<=120),
+ password_hash      TEXT NOT NULL,
+ role_type          TEXT NOT NULL CHECK(role_type IN ('listener_free','listener_premium')),
+ tenant_id          UUID NOT NULL,
+ created_at         TIMESTAMPTZ DEFAULT NOW(),
+ FOREIGN KEY(tenant_id)
+ REFERENCES tenants(tenant_id) ON DELETE CASCADE
+ );
 ----------RLS POLICY---
 --TENANTS--
 SELECT *FROM tenants;
