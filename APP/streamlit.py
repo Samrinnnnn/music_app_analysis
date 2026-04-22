@@ -1,10 +1,11 @@
 import streamlit as st
 import psycopg2
 import pandas as pd
+import plotly.express as px
 import matplotlib.pyplot as plt
 from psycopg2.extras import DictCursor
 
-st.set_page_config(page_title="Nepal Heart Music", layout="wide")
+st.set_page_config(page_title="WE CAN PLAY", layout="wide")
 
 st.markdown("""
 <style>
@@ -16,8 +17,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎵 Nepal Heart Music")
-st.markdown("**Music for Every Generation — Kopila, Phool & Basanta**")
+st.title("🎵 WE CAN PLAY")
+st.markdown("**Music for ME,YOU-US**")
 
 # ====================== SIDEBAR LOGIN ======================
 with st.sidebar:
@@ -130,27 +131,85 @@ with tab2:
             FROM songs 
             ORDER BY song_id DESC
         """)
-        df = pd.DataFrame(cur.fetchall())
+        rows=cur.fetchall()
+        cols=[desc[0] for desc in cur.description]
+        df=pd.DataFrame(rows,columns=cols)
         st.dataframe(df, use_container_width=True, hide_index=True)
     except Exception as e:
         st.error(f"Error: {e}")
 
+#TAB 3
+
 with tab3:
     if username in ["adminn", "appuser"]:
-        st.subheader("📊 Music Dashboard")
+        st.subheader("📊 Spotify-Style Analytics Dashboard (Safe Mode)")
+
+        import plotly.express as px
+
+        # ===================== 1. GENRE DISTRIBUTION =====================
         try:
             cur.execute("SELECT * FROM popular_genres()")
-            dfg = pd.DataFrame(cur.fetchall(), columns=["Genre", "Song Count", "Avg Rating"])
-            st.dataframe(dfg, use_container_width=True, hide_index=True)
-            
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.bar(dfg["Genre"], dfg["Song Count"], color="#1e3a8a")
-            ax.set_title("Popular Genres by Song Count")
-            ax.set_xlabel("Genre")
-            ax.set_ylabel("Number of Songs")
-            plt.xticks(rotation=45)
-            st.pyplot(fig)
-        except:
-            st.info("No data yet.")
-    else:
-        st.info("Dashboard is for Admin and Appuser only.")
+            df_genre = pd.DataFrame(cur.fetchall(), columns=["Genre", "Song Count", "Avg Rating"])
+
+            fig1 = px.bar(
+                df_genre,
+                x="Genre",
+                y="Song Count",
+                title="🎵 Genre Distribution"
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Genre chart skipped: {e}")
+
+        # ===================== 2. SONG RATING DISTRIBUTION =====================
+        try:
+            cur.execute("SELECT rating FROM songs")
+            df_rating = pd.DataFrame(cur.fetchall(), columns=["Rating"])
+
+            fig2 = px.histogram(
+                df_rating,
+                x="Rating",
+                title="⭐ Rating Distribution"
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Rating chart skipped: {e}")
+
+        # ===================== 3. PREMIUM VS FREE =====================
+        try:
+            cur.execute("""
+                SELECT is_premium, COUNT(*) 
+                FROM songs 
+                GROUP BY is_premium
+            """)
+            df_premium = pd.DataFrame(cur.fetchall(), columns=["Premium", "Count"])
+
+            fig3 = px.pie(
+                df_premium,
+                names="Premium",
+                values="Count",
+                title="💎 Premium vs Free Songs"
+            )
+            st.plotly_chart(fig3, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Premium chart skipped: {e}")
+
+        # ===================== 4. TOP SONGS (SAFE VERSION - NO play_history) =====================
+        try:
+            cur.execute("""
+                SELECT title, rating
+                FROM songs
+                ORDER BY rating DESC
+                LIMIT 10
+            """)
+            df_top = pd.DataFrame(cur.fetchall(), columns=["Title", "Rating"])
+
+            fig4 = px.bar(
+                df_top,
+                x="Title",
+                y="Rating",
+                title="🔥 Top Rated Songs"
+            )
+            st.plotly_chart(fig4, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Top songs chart skipped: {e}")
