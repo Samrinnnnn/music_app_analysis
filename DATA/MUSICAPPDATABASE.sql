@@ -111,6 +111,9 @@ CREATE TABLE users(
  FOREIGN KEY(tenant_id)
  REFERENCES tenants(tenant_id) ON DELETE CASCADE
  );
+
+-----------------EXTENSION----------
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ----------RLS POLICY---
 --TENANTS--
 SELECT *FROM tenants;
