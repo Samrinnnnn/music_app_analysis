@@ -213,16 +213,7 @@ CREATE POLICY playlist_members_free_deny_policy ON playlist_members
 CREATE POLICY playlist_members_default_deny ON playlist_members
  FOR ALL TO public USING (false);
 ---------------------------------------FUNCTION------------------------------------------------------
---1.set_app_current_tenant
-CREATE OR REPLACE FUNCTION set_app_current_tenant(p_tenant_id UUID)
-RETURNS VOID 
-LANGUAGE sql
-AS $$
-SELECT set_config('app.current_tenant', p_tenant_id::text,true);
-$$;
 
-GRANT EXECUTE ON FUNCTION set_app_current_tenant(UUID)
-TO appuser,adminn,listener_free,listener_premium;
 --2.get_avg_rating_per_genre
 CREATE OR REPLACE FUNCTION get_avg_rating_per_genre()
 RETURNS TABLE (genre_name VARCHAR, average_rating NUMERIC)
