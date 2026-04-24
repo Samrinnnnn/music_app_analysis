@@ -115,66 +115,103 @@ CREATE TABLE users(
 -----------------EXTENSION----------
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 ----------RLS POLICY---
---TENANTS--
-SELECT *FROM tenants;
+--DROPPING POLICIES
+DO $$ 
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (
+        SELECT policyname, tablename, schemaname
+        FROM pg_policies 
+        WHERE schemaname = 'public'
+    ) LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', 
+                      r.policyname, r.schemaname, r.tablename);
+    END LOOP;
+END $$;
+
+----CREATING NEW POLICIES AGAIN
+--tenants
 ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
 CREATE POLICY admin_manage_tenants ON tenants
-FOR ALL USING (current_user ='adminn') WITH CHECK (current_user ='adminn');
+ FOR ALL TO adminn USING (true) WITH CHECK (true);
 
-GRANT ALL ON tenants to adminn;
+CREATE POLICY no_access_tenants ON tenants
+ FOR ALL TO public USING(false);
 
---SONGS--
+---------------songs-----------
 ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
---DROPPING POLICIES
-ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenants_isolation_songs ON songs;
-DROP POLICY IF EXISTS songs_owner ON songs;
-DROP POLICY IF EXISTS listener_free_songs ON songs;
---1.songs_tenant_isolation
-CREATE POLICY songs_tenant_isolation ON songs AS RESTRICTIVE
-FOR ALL USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
---2. songs_appuser
-CREATE POLICY songs_appuser ON songs TO appuser 
-USING (tenant_id = current_setting('app.current_tenant')::uuid)
-WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
---3.songs_admin
-CREATE POLICY songs_admin ON songs TO adminn USING (true);
---4.songs_listener_all
-CREATE POLICY songs_listener_all ON songs FOR SELECT 
-TO listener_free, listener_premium USING (true);
+CREATE POLICY songs_admin_policy ON songs
+ FOR ALL TO adminn USING(true) WITH CHECK(true);
 
-ALTER TABLE songs FORCE ROW LEVEL SECURITY;
------------------------GRANT----------------------------------------
-GRANT SELECT,INSERT,UPDATE ON songs TO appuser;
-GRANT USAGE, SELECT ON SEQUENCE songs_song_id_seq TO appuser;
-GRANT ALL ON songs TO adminn;
-GRANT ALL ON SEQUENCE songs_song_id_seq TO adminn;
-GRANT SELECT ON songs TO listener_free,listener_premium;
---LISTENER PROFILES--
-ALTER TABLE listener_profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY songs_listener_premium_policy ON songs
+ FOR SELECT TO listener_premium USING(true);
 
-CREATE POLICY tenant_listener_profiles ON listener_profiles FOR ALL
-USING (tenant_id=current_setting('app.current_tenant')::uuid)
-WITH CHECK(tenant_id=current_setting('app.current_tenant')::uuid);
+CREATE POLICY songs_appuser_policy ON songs
+ FOR ALL TO appuser
+ USING(tenant_id=current_setting('app.current_tenant',true)::uuid)
+ WITH CHECK(tenant_id=current_setting('app.current_tenant',true)::uuid);
 
-CREATE POLICY own_profile ON listener_profiles FOR ALL
-USING (user_name =current_user AND tenant_id=current_setting('app.current_tenant')::uuid)
-WITH CHECK(user_name=current_user AND tenant_id=current_setting('app.current_tenant')::uuid);
--------------------GRANT---------
-GRANT SELECT,INSERT,UPDATE ON listener_profiles TO listener_free,listener_premium;
-------PREMIUM SUBSCRIPTION------
-ALTER TABLE premium_subscription ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_subscription ON premium_subscription FOR ALL
-USING(tenant_id=current_setting('app.current_tenant')::uuid)
-WITH CHECK(tenant_id=current_setting('app.current_tenant')::uuid);
+CREATE POLICY songs_default_deny ON songs
+ FOR ALL TO public USING (false);
 
-CREATE POLICY own_tenant_subscription ON premium_subscription FOR ALL
-USING(user_name= current_user AND tenant_id=current_setting('app.current_tenant')::uuid)
-WITH CHECK(user_name=current_user AND tenant_id=current_setting('app.current_tenant')::uuid);
----------------GRANT---------------------------
-GRANT SELECT, INSERT, UPDATE ON premium_subscription TO listener_free,listener_premium;
+CREATE POLICY songs_listener_free_policy ON songs
+ FOR SELECT TO listener_free USING(is_premium=false);
+------------playlists-----------
+ALTER TABLE playlists ENABLE ROW LEVEL SECURITY;
+CREATE POLICY playlists_admin_policy ON playlists
+FOR ALL TO adminn USING(true) WITH CHECK(true);
 
+CREATE POLICY playlists_appuser_policy ON playlists
+ FOR ALL TO appuser
+ USING(tenant_id=current_setting('app.current_tenant',true)::uuid)
+ WITH CHECK(tenant_id=current_setting('app.current_tenant',true)::uuid);
+
+CREATE POLICY playlists_premium_policy ON playlists
+ FOR ALL  TO listener_premium
+ USING
+ is_public=true
+ OR created_by=current_setting('app.current_username',true)
+ )
+ WITH CHECK(
+ created_by=current_setting('app.current_username',true)
+ );
+CREATE POLICY playlists_free_deny_policy ON playlists
+ FOR ALL TO listener_free USING(false) WITH CHECK(false);
+
+CREATE POLICY playlists_default_deny ON playlists
+ FOR ALL TO public USING (false);
+-----------------playlist_member
+ALTER TABLE playlist_members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY playlist_members_admin_policy ON playlist_members
+ FOR ALL TO adminn USING(true) WITH CHECK (true);
+
+CREATE POLICY playlist_members_appuser_policy ON playlist_members
+ FOR ALL TO appuser
+ USING(tenant_id=current_setting('app.current_tenant',true)::uuid)
+ WITH CHECK(tenant_id=current_setting('app.current_tenant',true)::uuid);
+
+CREATE POLICY playlist_members_premium_policy ON playlist_members
+ FOR ALL TO listener_premium
+ USING(
+ EXISTS(
+ SELECT 1 FROM playlists p
+ WHERE p.playlist_id=playlist_members.playlist_id
+ AND (p.is_public = true OR p.created_by=current_setting('app.current_username',true))
+ )
+ )
+ WITH CHECK(
+ EXISTS(
+ SELECT 1 FROM playlists p
+ WHERE p.playlist_id=playlist_members.playlist_id
+ AND p.created_by=current_setting('app.current_username',true))
+ );
+
+CREATE POLICY playlist_members_free_deny_policy ON playlist_members
+ FOR ALL TO listener_free USING (FALSE) WITH CHECK(FALSE);
+
+CREATE POLICY playlist_members_default_deny ON playlist_members
+ FOR ALL TO public USING (false);
 ---------------------------------------FUNCTION------------------------------------------------------
 --1.set_app_current_tenant
 CREATE OR REPLACE FUNCTION set_app_current_tenant(p_tenant_id UUID)
