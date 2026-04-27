@@ -583,3 +583,52 @@ with tab4:
                 st.info("😔 No songs found. Try different search terms!")
         except Exception as e:
             st.error(f"Search error: {e}")
+# ====================== TAB 5: HISTORY ======================
+with tab5:
+    if role == "listener":
+        st.markdown("## 📜 Your Listening Journey")
+        
+        try:
+            cur.execute("SELECT * FROM my_history")
+            history = cur.fetchall()
+            
+            if history:
+                df_history = pd.DataFrame(history, columns=["Title", "Artist", "Genre", "Rating", "Premium", "Played At", "Duration"])
+                st.dataframe(df_history, use_container_width=True, hide_index=True)
+                
+                # Stats
+                st.markdown("### 📊 Listening Stats")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Total Songs Played", len(df_history))
+                col2.metric("Unique Artists", df_history['Artist'].nunique())
+                col3.metric("Avg Rating", f"{df_history['Rating'].mean():.1f}⭐")
+            else:
+                st.info("🎧 No listening history yet. Start playing some songs!")
+        except Exception as e:
+            st.info("✨ Your listening history will appear here")
+        
+        st.markdown("---")
+        st.markdown("### 🎮 Quick Play")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            song_id = st.number_input("Song ID", min_value=1, step=1, help="Enter the Song ID from Browse tab")
+        with col2:
+            duration = st.number_input("Duration (seconds)", min_value=10, value=180, step=30)
+        
+        if st.button("▶️ Play Song", type="primary", use_container_width=True):
+            try:
+                cur.execute("SELECT record_song_play(%s, %s, %s)", (song_id, duration, username))
+                result = cur.fetchone()[0]
+                conn.commit()
+                if "Permission Denied" in result:
+                    st.warning(result)
+                elif "successfully" in result.lower():
+                    st.success(f"🎵 {result}")
+                    st.balloons()
+                else:
+                    st.info(result)
+            except Exception as e:
+                st.error(f"Failed to record play: {e}")
+    else:
+        st.info("📜 Listening history is available for listeners only")
