@@ -472,78 +472,183 @@ with tab3:
     if role in ["admin", "appuser"]:
         st.markdown("## 📊 Analytics Dashboard")
         
+        # ============ FIRST: TOP SONGS PER GENRE (DENSE_RANK) ============
+        st.markdown("### 🏆 Top Songs Per Genre")
+        st.caption("Using DENSE_RANK - Same rating = Same rank | No gaps")
+        
+        try:
+            # Call the DENSE_RANK function
+            cur.execute("SELECT * FROM top_songs_per_genre() WHERE rank <= 5")
+            top_songs_data = cur.fetchall()
+            
+            if top_songs_data and len(top_songs_data) > 0:
+                # Create DataFrame
+                df_top = pd.DataFrame(top_songs_data, columns=["Rank", "Genre", "Title", "Artist", "Rating"])
+                
+                # Display as simple, clean table
+                st.dataframe(
+                    df_top[['Rank', 'Genre', 'Title', 'Artist', 'Rating']], 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+                
+                # Display as simple expandable sections by genre
+                st.markdown("### 📂 Browse by Genre")
+                for genre in df_top['Genre'].unique():
+                    with st.expander(f"🎵 {genre}", expanded=False):
+                        genre_df = df_top[df_top['Genre'] == genre]
+                        for _, row in genre_df.iterrows():
+                            medal = "🥇" if row['Rank'] == 1 else "🥈" if row['Rank'] == 2 else "🥉" if row['Rank'] == 3 else f"#{row['Rank']}"
+                            st.write(f"{medal} **{row['Title']}** - {row['Artist']} (⭐ {row['Rating']}/5)")
+            else:
+                st.info("No songs found")
+        except Exception as e:
+            st.error(f"Error loading top songs: {e}")
+        
+        st.markdown("---")
+        # ============ END DENSE_RANK SECTION ============
+        
         # Metrics Row
         col1, col2, col3, col4 = st.columns(4)
         
         try:
             cur.execute("SELECT COUNT(*) FROM songs")
             total_songs = cur.fetchone()[0]
-            col1.metric("Total Songs", total_songs, delta=None)
-            
+            col1.metric("Total Songs", total_songs)
+        except:
+            col1.metric("Total Songs", "N/A")
+        
+        try:
             cur.execute("SELECT COUNT(*) FROM songs WHERE is_premium = TRUE")
             premium_songs = cur.fetchone()[0]
-            col2.metric("Premium Songs", premium_songs, delta=f"{premium_songs/total_songs*100:.0f}%")
-            
+            col2.metric("Premium Songs", premium_songs)
+        except:
+            col2.metric("Premium Songs", "N/A")
+        
+        try:
             cur.execute("SELECT COUNT(DISTINCT artist) FROM songs")
             total_artists = cur.fetchone()[0]
             col3.metric("Unique Artists", total_artists)
-            
+        except:
+            col3.metric("Unique Artists", "N/A")
+        
+        try:
             cur.execute("SELECT ROUND(AVG(rating), 1) FROM songs WHERE rating IS NOT NULL")
             avg_rating = cur.fetchone()[0] or 0
             col4.metric("Avg Rating", f"⭐ {avg_rating}")
-        except Exception as e:
-            st.warning(f"Could not load metrics: {e}")
+        except:
+            col4.metric("Avg Rating", "N/A")
         
-        # Charts
+        # Charts Row
         col1, col2 = st.columns(2)
         
+        # ============ FIXED: GENRE DISTRIBUTION (Direct Query) ============
         with col1:
+            st.markdown("### 🎵 Genre Distribution")
             try:
-                cur.execute("SELECT * FROM popular_genres()")
-                df_genre = pd.DataFrame(cur.fetchall(), columns=["Genre", "Count", "Avg Rating"])
-                if not df_genre.empty:
-                    fig = px.bar(df_genre, x="Genre", y="Count", title="🎵 Genre Distribution", 
-                                 color="Avg Rating", color_continuous_scale="Viridis")
+                # Use direct query instead of function
+                cur.execute("""
+                    SELECT genre, COUNT(*) as song_count, ROUND(AVG(rating), 2) as avg_rating
+                    FROM songs
+                    GROUP BY genre
+                    ORDER BY song_count DESC
+                """)
+                genre_data = cur.fetchall()
+                
+                if genre_data and len(genre_data) > 0:
+                    df_genre = pd.DataFrame(genre_data, columns=["Genre", "Song Count", "Avg Rating"])
+                    fig = px.bar(df_genre, x="Genre", y="Song Count", 
+                                 title="Songs by Genre",
+                                 color="Avg Rating", 
+                                 color_continuous_scale="Viridis")
                     fig.update_layout(height=400)
                     st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No genre data available")
             except Exception as e:
-                st.warning(f"Genre chart unavailable")
+                st.warning(f"Could not load genre chart: {e}")
+                # Fallback: Show simple table
+                try:
+                    cur.execute("SELECT genre, COUNT(*) FROM songs GROUP BY genre")
+                    simple_data = cur.fetchall()
+                    if simple_data:
+                        st.table(pd.DataFrame(simple_data, columns=["Genre", "Count"]))
+                except:
+                    pass
         
+        # ============ FIXED: TOP ARTISTS (Direct Query) ============
         with col2:
+            st.markdown("### 🎤 Top Artists")
             try:
-                cur.execute("SELECT * FROM popular_artists()")
-                df_artist = pd.DataFrame(cur.fetchall(), columns=["Artist", "Count", "Avg Rating"])
-                if not df_artist.empty:
-                    fig = px.bar(df_artist.head(10), x="Artist", y="Count", title="🎤 Top 10 Artists",
-                                 color="Avg Rating", color_continuous_scale="Plasma")
-                    fig.update_layout(height=400)
+                # Use direct query instead of function
+                cur.execute("""
+                    SELECT artist, COUNT(*) as song_count, ROUND(AVG(rating), 2) as avg_rating
+                    FROM songs
+                    GROUP BY artist
+                    ORDER BY song_count DESC
+                    LIMIT 10
+                """)
+                artist_data = cur.fetchall()
+                
+                if artist_data and len(artist_data) > 0:
+                    df_artist = pd.DataFrame(artist_data, columns=["Artist", "Song Count", "Avg Rating"])
+                    fig = px.bar(df_artist, x="Artist", y="Song Count", 
+                                 title="Top 10 Artists",
+                                 color="Avg Rating", 
+                                 color_continuous_scale="Plasma")
+                    fig.update_layout(height=400, xaxis_tickangle=-45)
                     st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No artist data available")
             except Exception as e:
-                st.warning(f"Artist chart unavailable")
+                st.warning(f"Could not load artist chart: {e}")
+                # Fallback: Show simple table
+                try:
+                    cur.execute("SELECT artist, COUNT(*) FROM songs GROUP BY artist ORDER BY COUNT(*) DESC LIMIT 5")
+                    simple_data = cur.fetchall()
+                    if simple_data:
+                        st.table(pd.DataFrame(simple_data, columns=["Artist", "Song Count"]))
+                except:
+                    pass
         
         # Premium vs Free Pie Chart
+        st.markdown("### 💎 Premium vs Free Songs")
         try:
             cur.execute("SELECT is_premium, COUNT(*) FROM songs GROUP BY is_premium")
-            df_premium = pd.DataFrame(cur.fetchall(), columns=["Type", "Count"])
-            df_premium['Type'] = df_premium['Type'].map({True: 'Premium 💎', False: 'Free 🎵'})
+            premium_data = cur.fetchall()
             
-            fig = px.pie(df_premium, values="Count", names="Type", title="📊 Premium vs Free Songs",
-                         color_discrete_sequence=['#764ba2', '#667eea'])
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True)
+            if premium_data and len(premium_data) > 0:
+                df_premium = pd.DataFrame(premium_data, columns=["Type", "Count"])
+                df_premium['Type'] = df_premium['Type'].map({True: 'Premium 💎', False: 'Free 🎵'})
+                
+                fig = px.pie(df_premium, values="Count", names="Type", 
+                             title="Premium vs Free Distribution",
+                             color_discrete_sequence=['#764ba2', '#667eea'])
+                fig.update_layout(height=400)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No premium/free data available")
         except Exception as e:
-            st.warning(f"Premium chart unavailable")
+            st.warning(f"Could not load premium chart: {e}")
         
         # Rating Distribution
+        st.markdown("### ⭐ Rating Distribution")
         try:
             cur.execute("SELECT rating FROM songs WHERE rating IS NOT NULL")
-            df_rating = pd.DataFrame(cur.fetchall(), columns=["Rating"])
-            fig = px.histogram(df_rating, x="Rating", title="⭐ Rating Distribution", 
-                               nbins=20, color_discrete_sequence=['#667eea'])
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True)
+            rating_data = cur.fetchall()
+            
+            if rating_data and len(rating_data) > 0:
+                df_rating = pd.DataFrame(rating_data, columns=["Rating"])
+                fig = px.histogram(df_rating, x="Rating", 
+                                   title="Song Rating Distribution", 
+                                   nbins=20, 
+                                   color_discrete_sequence=['#667eea'])
+                fig.update_layout(height=400)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No rating data available")
         except Exception as e:
-            st.warning(f"Rating chart unavailable")
+            st.warning(f"Could not load rating chart: {e}")
             
     else:
         st.info("📊 Analytics Dashboard is available for Admin and Appuser only")
