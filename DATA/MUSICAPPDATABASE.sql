@@ -670,5 +670,19 @@ SELECT set_config('app.current_tenant','006b1b19-c1bc-489f-902b-f7aa1034b244', F
 SELECT COUNT(*) AS total,
 COUNT(CASE WHEN is_premium THEN 1 END) AS premium_count
 FROM listener_songs_view;
-
-
+---------------TEMP TABLE
+CREATE TEMP TABLE temp_song_stats AS 
+SELECT
+song_id,
+title,
+artist,
+genre,
+rating,
+is_premium
+FROM songs;
+----------------CHARTS---------------
+SELECT genre,COUNT(*) FROM temp_song_stats GROUP BY genre;
+SELECT rating,COUNT(*) FROM temp_song_stats GROUP BY rating;
+SELECT is_premium, COUNT(*) FROM temp_song_stats GROUP BY is_premium;
+SELECT artist, COUNT(*) FROM temp_song_stats GROUP BY artist;
+SELECT title,rating FROM temp_song_stats ORDER BY rating DESC;
