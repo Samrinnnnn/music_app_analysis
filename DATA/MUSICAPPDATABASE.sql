@@ -656,6 +656,20 @@ ALTER VIEW listener_songs_view SET(security_barrier=true);
 REVOKE SELECT ON songs FROM listener_free,listener_premium;
 GRANT SELECT ON listener_songs_view TO listener_free,listener_premium;
 
+CREATE OR REPLACE VIEW dashboard_overview AS
+ SELECT 'Total Songs' AS category,COUNT(*)::TEXT AS value FROM songs
+ UNION ALL
+ SELECT 'Premium Songs' AS COUNT(*)::TEXT FROM songs WHERE is_premium=TRUE
+ UNION ALL
+ SELECT 'Total User' AS COUNT(*)::TEXT FROM users
+ UNION ALL
+ SELECT ' Avg Rating', ROUND(AVG(rating), 1)::TEXT FROM songs
+UNION ALL
+SELECT ' Total Plays', COUNT(*)::TEXT FROM play_history;
+
+SELECT *FROM dashboard_overview;
+
+ 
 ---------------------TESTING-----------------------
 SET ROLE=listener_free;
 SELECT *FROM songs;
