@@ -553,16 +553,18 @@ GRANT EXECUTE ON FUNCTION user_login(TEXT,TEXT,UUID) TO app_login;
 GRANT SELECT ON users TO app_login;
 GRANT EXECUTE ON ALL FUNCTION IN SCHEMA public TO app_login;
 ---------------------------------------Index-------------------------------------------------------------
-SELECT *FROM tenants;
-
-CREATE INDEX idx_tenants_song ON songs(tenant_id);
-CREATE INDEX idx_added_by ON songs(added_by,tenant_id);
-
-CREATE INDEX idx_tenants_user ON listener_profiles(tenant_id,user_name);
-CREATE INDEX idx_subtenant_user ON premium_subscription(tenant_id,user_name);
-
-CREATE INDEX idx_song_search
-ON songs (tenant_id, title, artist);
+----SONGS TABLE INDEX----
+CREATE INDEX idx_songs_tenant_id ON songs(tenant_id);
+CREATE INDEX idx_songs_title_search ON songs(title);
+CREATE INDEX idx_songs_artist_search ON songs(artist);
+CREATE INDEX idx_songs_rating ON songs(rating DESC);
+CREATE INDEX idx_songs_premium ON songs(is_premium);
+------Playlists Table--------
+CREATE INDEX idx_playlists_created_by ON playlists(created_by);
+-------Play_history Table---------
+CREATE INDEX idx_play_history_song_id ON play_history(song_id);
+CREATE INDEX idx_play_history_user_name ON play_history(user_name);
+CREATE INDEX idx_play_history_played_at ON play_history(played_at);
 
 SELECT tablename, indexname FROM pg_indexes 
 WHERE schemaname = 'public' 
