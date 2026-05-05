@@ -215,7 +215,7 @@ CREATE POLICY playlist_members_default_deny ON playlist_members
  FOR ALL TO public USING (false);
 ---------------------------------------FUNCTION------------------------------------------------------
 
---2.get_avg_rating_per_genre
+--1.get_avg_rating_per_genre
 CREATE OR REPLACE FUNCTION get_avg_rating_per_genre()
 RETURNS TABLE (genre_name VARCHAR, average_rating NUMERIC)
 LANGUAGE plpgsql
@@ -229,95 +229,15 @@ BEGIN
         ORDER BY 2 DESC;
 END;
 $$;
----3.listener genre counts
+---2.listener genre counts
 CREATE OR REPLACE FUNCTION listener_genre_counts()
  RETURNS TABLE(genre_name VARCHAR,song_count BIGINT) AS $$
  SELECT genre,COUNT(*) FROM songs
  WHERE tenant_id=current_setting('app.current_tenant')::uuid
  GROUP BY genre ORDER BY COUNT(*) DESC;
 $$ LANGAUGE sql;
-----4.premium_recommendation
-CREATE OR REPLACE FUNCTION premium_recommendation(limit_count INT DEFAULT 6)
-RETURNS TABLE(title VARCHAR,artist VARCHAR, genre VARCHAR, rating NUMERIC, is_premium BOOLEAN)
-LANGUAGE SQL SECURITY DEFINER
-AS $$
-SELECT title,artist,genre,rating, is_premium
-FROM songs
-where is_premium=TRUE
-AND rating IS NOT NULL
-AND tenant_id=current_setting('app.current_tenant')::uuid
-ORDER BY rating DESC, RANDOM()
-LIMIT limit_count;
-$$;
---5.get_listener_profiles
-CREATE OR REPLACE FUNCTION get_listener_profiles()
-RETURNS TABLE (full_name VARCHAR(100), address TEXT)
-LANGUAGE sql AS $$
-    SELECT full_name, address
-    FROM listener_profiles
-    WHERE user_name = current_user
-      AND tenant_id = current_setting('app.current_tenant')::uuid;
-$$;
---6.update_listener_profile
-CREATE OR REPLACE FUNCTION update_listener_profile(
-    p_full_name VARCHAR(100),
-    p_address   TEXT
-)
-RETURNS TEXT LANGUAGE plpgsql AS $$
-BEGIN
-    INSERT INTO listener_profiles (user_name, full_name, address, tenant_id)
-    VALUES (current_user, p_full_name, p_address, current_setting('app.current_tenant')::uuid)
-    ON CONFLICT (user_name) DO UPDATE SET
-        full_name  = EXCLUDED.full_name,
-        address    = EXCLUDED.address,
-        updated_at = NOW();
 
-    RETURN 'Profile updated successfully.';
-EXCEPTION WHEN OTHERS THEN
-    RETURN 'Error: ' || SQLERRM;
-END;
-$$;
---7.subscribe_to_premium
-CREATE OR REPLACE FUNCTION subscribe_to_premium()
-RETURNS TEXT LANGUAGE plpgsql AS $$
-BEGIN
-    INSERT INTO premium_subscriptions (user_name, tenant_id)
-    VALUES (current_user, current_setting('app.current_tenant')::uuid)
-    ON CONFLICT (user_name) DO UPDATE SET
-        subscribed_at   = NOW(),
-        payment_status  = 'completed';
-
-    RETURN 'Premium subscription successful! (simulated)';
-EXCEPTION WHEN OTHERS THEN
-    RETURN 'Error: ' || SQLERRM;
-END;
-$$;
---8.Top leaderboard
-CREATE OR REPLACE FUNCTION top_leaderboard()
-RETURNS TABLE(
-    uploader TEXT,
-    total_songs BIGINT,
-    rank BIGINT,
-    tenants_name TEXT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        s.added_by,
-        COUNT(s.song_id),
-        RANK() OVER (ORDER BY COUNT(s.song_id) DESC),
-        t.name::TEXT   --  CAST FIX
-    FROM songs s
-    JOIN tenants t 
-         ON s.tenant_id = t.tenant_id
-    WHERE s.tenant_id = current_setting('app.current_tenant')::uuid
-    GROUP BY s.added_by, t.name
-    ORDER BY 3;
-END;
-$$;
---9.add_song--------------------------
+--3.add_song--------------------------
 CREATE OR REPLACE FUNCTION add_song(
     p_title      VARCHAR(150),
     p_artist     VARCHAR(50),
@@ -358,7 +278,7 @@ EXCEPTION
         RETURN 'ERROR: ' || SQLERRM;
 END;
 $$;
---------------10. record_song_play
+--------------4.. record_song_play
 CREATE OR REPLACE FUNCTION record_song_play(p_song_id integer,p_duration integer DEFAULT NULL)
  RETURNS TEXT AS $$
  DECLARE
@@ -377,7 +297,7 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
  
- ----------11.get_age_based_recommendations
+ ----------5.get_age_based_recommendations
 CREATE OR REPLACE FUNCTION get_age_based_recommendations()
 RETURNS TABLE(
     title VARCHAR,
@@ -430,7 +350,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
---------12."This Week's Famous Songs" based on actual plays"-------------
+--------6."This Week's Famous Songs" based on actual plays"-------------
 CREATE OR REPLACE FUNCTION this_week_famous()
  RETURNS TABLE(
    song_id    INT,
@@ -461,7 +381,7 @@ CREATE OR REPLACE FUNCTION this_week_famous()
 END;
 $$ LANGUAGE plpgsql;
 
------13.Popular Genres Function
+-----7.Popular Genres Function
 CREATE OR REPLACE FUNCTION popular_genres()
  RETURNS TABLE(
  genre VARCHAR,
@@ -481,7 +401,7 @@ CREATE OR REPLACE FUNCTION popular_genres()
  LIMIT 8;
 END;
 $$ LANGUAGE plpgsql;
------14. Popular Artists Function
+-----8. Popular Artists Function
 CREATE OR REPLACE FUNCTION popular_artists()
  RETURNS TABLE(
         artist     VARCHAR,
@@ -501,7 +421,7 @@ CREATE OR REPLACE FUNCTION popular_artists()
  LIMIT 8;
 END;
 $$ LANGUAGE plpgsql;
-------15.user_login function
+------9.user_login function
 CREATE OR REPLACE FUNCTION user_login(p_username TEXT, p_password TEXT, p_tenant_id UUID DEFAULT NULL)
 RETURNS TEXT AS $$
 DECLARE 
@@ -532,12 +452,67 @@ PERFORM set_config('app.current_tenant',v_tenant::text,false);
 RETURN 'Login successful as' || v_role_type;
 END;
 $$ LANGUAGE plpgsql;
+--10.top_songs
+CREATE OR REPLACE FUNCTION top_songs_per_genre()
+ RETURNS TABLE(rank BIGINT, genre VARCHAR,title VARCHAR,artist VARCHAR,rating NUMERIC)
+ LANGUAGE sql AS $$
+ SELECT DENSE_RANK() OVER (PARTITION BY genre ORDER BY rating DESC) AS rank,
+ genre,title,artist,rating
+ FROM songs
+ ORDER BY genre,rank
+ $$;
+GRANT EXECUTE ON FUNCTION top_songs_per_genre TO adminn,appuser;
+--11.get_listening_streak
+CREATE OR REPLACE FUNCTION get_listening_streak(p_user_name TEXT)
+ RETURNS TABLE(listen_date DATE, streak_number INTEGER) AS $$
+ BEGIN
+ RETURN QUERY
+ WITH RECURSIVE streak AS(
+ SELECT MAX(DATE(played_at)) AS dt, 1 as cnt
+ FROM play_history WHERE user_name=p_user_name
+ UNION ALL
+ SELECT s.dt-1,s.cnt + 1
+ FROM streak s
+ WHERE EXISTS(
+ SELECT 1 FROM play_history
+ WHERE user_name=p.user_name AND DATE(played_at)=s.dt - 1
+ ))
+ SELECT dt,cnt FROM streak ORDER BY dt DESC;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION get_listening_streak(TEXT) TO adminn,appuser,listener_premium,listener_free;
+--12.add multiple songs
+CREATE OR REPLACE FUNCTION add_multiple_songs(
+ p_titles             TEXT[],
+ p_artists            TEXT[],
+ p_genres             TEXT[],
+ p_ratings            NUMERIC[],
+ p_is_premium         BOOLEAN[],
+ p_durations          INTEGER[]
+ )
+ RETURNS TEXT AS $$
+ DECLARE
+ i INTEGER;
+v_tenant_id UUID;
+v_added INTEGER :=0;
+BEGIN
+ v_tenant_id:= current_setting('app.current_tenant',true)::UUID;
+IF v_tenant_id IS NULL THEN
+ RETURN 'ERROR:Tenant not set';
+END IF;
+FOR i IN 1....array_length(p_titles,1) LOOP
+ array_length(p_titles,1)=3
+ INSERT INTO songs(title,artist,genre,rating,is_premium,tenant_id,added_by,
+ duration_seconds)
+ VALUES(p_titles[i],p_artists[i],p_genres[i],p_ratings[i],p_is_premium[i],
+ v_tenant_id,current_user,p_durations[i]);
+v_added:=v_added + 1;
+END LOOP;
+RETURN format('Added %s songs',v_added);
+END;
+$$ LANGUAGE plpgsql;
 
-
-
-
-
-
+GRANT EXECUTE ON FUNCTION add_multiple_songs TO appuser,adminn;
 
 
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
