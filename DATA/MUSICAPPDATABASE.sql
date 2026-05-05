@@ -681,6 +681,13 @@ CREATE OR REPLACE VIEW my_history AS
 GRANT SELECT ON my_history TO listener_free,listener_premium;
  
  SELECT set_config('app.current_username', 'Samrin', false);
+
+CREATE OR REPLACE VIEW song_listener_stats AS 
+ SELECT s.song_id,s.title,s.artist,s.genre,s.rating,s.is_premium,COUNT(DISTINCT ph.user_name)
+ FROM songs s
+ LEFT JOIN play_history ph ON s.song_id=ph.song_id
+ GROUP BY s.song_id,s.title,s.artist,s.genre,s.rating,s.is_premium;
+GRANT SELECT ON song_listener_stats TO listener_premium,appuser,adminn;
 ---------------------TESTING-----------------------
 SET ROLE=listener_free;
 SELECT *FROM songs;
