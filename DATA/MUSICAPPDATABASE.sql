@@ -513,7 +513,24 @@ END;
 $$ LANGUAGE plpgsql;
 
 GRANT EXECUTE ON FUNCTION add_multiple_songs TO appuser,adminn;
-
+--13.add_playlist_member
+CREATE OR REPLACE FUNCTION add_playlist_member(
+ p_playlist_id    UUID,
+ p_user_name      TEXT,
+ p_role            TEXT DEFAULT 'viewer'
+ )
+ RETURNS TEXT AS $$
+ BEGIN
+ INSERT INTO playlist_members(playlist_id,user_name,role)
+ VALUES(p_playlist_id,p_user_name,p_role)
+ ON CONFLICT(playlist_id,user_name) DO NOTHING;
+RETURN 'Successfully joined playlist as'|| p_role;
+EXCEPTION WHEN OTHERS THEN
+ RETURN 'Error joining playlist:'|| SQLERRM;
+END;
+$$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION add_playlist_member(UUID,TEXT,TEXT) TO listener_free,listener_premium;
+ 
 
 REVOKE EXECUTE ON FUNCTION add_song FROM listener_free, listener_premium;
 GRANT EXECUTE ON FUNCTION add_song TO appuser, adminn;
