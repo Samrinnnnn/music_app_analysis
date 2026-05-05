@@ -650,15 +650,7 @@ GRANT SELECT(id,title,artist,genre,rating,is_premium,tenant_id)
 ON TABLE songs
 TO listener_free;
 ---------------------------------VIEW-----------------------------------------
-DROP VIEW IF EXISTS listener_songs_view;
-CREATE OR REPLACE VIEW listener_songs_view AS
-SELECT id,title,artist,genre,rating,is_premium,tenant_id
-FROM songs
-WHERE tenant_id=current_setting('app.current_tenant',true)::uuid
-AND(current_user!='listener_free' OR is_premium=FALSE);
-ALTER VIEW listener_songs_view SET(security_barrier=true);
-REVOKE SELECT ON songs FROM listener_free,listener_premium;
-GRANT SELECT ON listener_songs_view TO listener_free,listener_premium;
+
 
 CREATE OR REPLACE VIEW dashboard_overview AS
  SELECT 'Total Songs' AS category,COUNT(*)::TEXT AS value FROM songs
@@ -673,7 +665,22 @@ SELECT ' Total Plays', COUNT(*)::TEXT FROM play_history;
 
 SELECT *FROM dashboard_overview;
 
+CREATE OR REPLACE VIEW my_history AS
+ SELECT s.title,
+ s.artist,
+ s.genre,
+ s.rating,
+ s.is_premium,
+ ph.played_at,
+ ph.listen_duration
+ FROM play_history ph
+ JOIN songs s ON ph.song_id=s.song_id
+ WHERE ph.user_name=current_setting('app.current_username',true)
+ ORDER BY ph.played_at DESC;
+--------GRANT PERMISSION---
+GRANT SELECT ON my_history TO listener_free,listener_premium;
  
+ SELECT set_config('app.current_username', 'Samrin', false);
 ---------------------TESTING-----------------------
 SET ROLE=listener_free;
 SELECT *FROM songs;
@@ -685,9 +692,7 @@ SET ROLE='listener_premium';
 SET ROLE='listener_free';
 SELECT set_config('app.current_tenant','006b1b19-c1bc-489f-902b-f7aa1034b244', FALSE);
 
-SELECT COUNT(*) AS total,
-COUNT(CASE WHEN is_premium THEN 1 END) AS premium_count
-FROM listener_songs_view;
+
 ---------------TEMP TABLE
 CREATE TEMP TABLE temp_song_stats AS 
 SELECT
