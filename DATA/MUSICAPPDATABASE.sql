@@ -44,16 +44,18 @@ INSERT INTO tenants(name,location) VALUES
 
 --2.song table
 CREATE TABLE songs(
-song_id  SERIAL PRIMARY KEY,
-title    VARCHAR(150) NOT NULL,
-artist   VARCHAR(50) NOT NULL,
-genre    VARCHAR(60) NOT NULL,
-rating   NUMERIC(3,1) CHECK(rating BETWEEN 0 AND 5 ),
-is_premium BOOLEAN DEFAULT FALSE,
-added_by  TEXT NOT NULL DEFAULT current_user,
-tenant_id  UUID NOT NULL,
+song_id           SERIAL PRIMARY KEY,
+title             VARCHAR(150) NOT NULL,
+artist            VARCHAR(50) NOT NULL,
+genre             VARCHAR(60) NOT NULL,
+rating            NUMERIC(3,1) CHECK(rating BETWEEN 0 AND 5 ),
+is_premium        BOOLEAN DEFAULT FALSE,
+added_by          TEXT NOT NULL DEFAULT current_user,
+tenant_id         UUID NOT NULL,
+duration_seconds  INTEGER CHECK(duration_seconds>0),
+updated_at        TIMESTAMPTZ DEFAULT NOW(),
 FOREIGN KEY(tenant_id)
-REFERENCES tenants(tenant_id)
+REFERENCES tenants(tenant_id) ON DELETE CASCADE
 );
 --.TABLE DROP
 DROP TABLE IF EXISTS premium_subscription CASCADE;
