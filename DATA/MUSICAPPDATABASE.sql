@@ -70,9 +70,7 @@ CREATE TABLE play_history(
  listen_duration    INTEGER CHECK (listen_duration>=0),
  tenant_id          UUID NOT NULL,
 FOREIGN KEY(user_name)
-REFERENCES listener_profiles(user_name) ON DELETE CASCADE,
-FOREIGN KEY(song_id)
-REFERENCES songs (song_id) ON DELETE CASCADE,
+REFERENCES users(user_name) ON DELETE CASCADE,
 FOREIGN KEY(tenant_id)
 REFERENCES tenants (tenant_id) ON DELETE CASCADE
  );
@@ -98,6 +96,7 @@ CREATE TABLE IF NOT EXISTS playlists(
  tenant_id              UUID NOT NULL,
  created_by             TEXT NOT NULL DEFAULT current_user,
  created_at             TIMESTAMPTZ DEFAULT NOW(),
+ song_ids               INTEGER[] DEFAULT'{}',
  FOREIGN KEY(tenant_id) REFERENCES tenants(tenant_id) ON DELETE CASCADE
  );
 
@@ -232,15 +231,11 @@ END;
 $$;
 ---3.listener genre counts
 CREATE OR REPLACE FUNCTION listener_genre_counts()
-RETURNS TABLE(genre_name VARCHAR,song_count BIGINT )
-LANGUAGE sql SECURITY DEFINER 
-AS $$
-SELECT genre,COUNT(*)
-FROM songs
-WHERE tenant_id=current_setting('app.current_tenant')::uuid
-GROUP BY genre HAVING COUNT(*) >0
-ORDER BY COUNT(*) DESC;
-$$;
+ RETURNS TABLE(genre_name VARCHAR,song_count BIGINT) AS $$
+ SELECT genre,COUNT(*) FROM songs
+ WHERE tenant_id=current_setting('app.current_tenant')::uuid
+ GROUP BY genre ORDER BY COUNT(*) DESC;
+$$ LANGAUGE sql;
 ----4.premium_recommendation
 CREATE OR REPLACE FUNCTION premium_recommendation(limit_count INT DEFAULT 6)
 RETURNS TABLE(title VARCHAR,artist VARCHAR, genre VARCHAR, rating NUMERIC, is_premium BOOLEAN)
