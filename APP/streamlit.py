@@ -339,13 +339,13 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 
 # ====================== TAB 1: HOME ======================
 with tab1:
+    # ============ HERO SECTION ============
     st.markdown("## 🌟 Welcome to WE CAN PLAY")
     
-    # Hero section
     col1, col2 = st.columns([2, 1])
     with col1:
         st.markdown("""
-        <div class="info-card">
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 15px;">
             <h3>🎉 Discover New Music</h3>
             <p>Explore thousands of songs, create playlists, and enjoy personalized recommendations.</p>
             <p>⭐ <b>Premium users</b> get access to all songs and can create collaborative playlists!</p>
@@ -358,47 +358,101 @@ with tab1:
             user_role = cur.fetchone()
             if user_role and user_role[0] == 'listener_premium':
                 st.markdown("""
-                <div class="metric-card">
-                    <div class="metric-value">💎 PREMIUM</div>
-                    <div class="metric-label">Unlimited Access</div>
+                <div style="background: linear-gradient(135deg, #667eea, #764ba2); padding: 20px; border-radius: 15px; text-align: center; color: white;">
+                    <div style="font-size: 2em; font-weight: bold;">💎 PREMIUM</div>
+                    <div style="font-size: 0.9em;">Unlimited Access</div>
                 </div>
                 """, unsafe_allow_html=True)
             else:
                 st.markdown("""
-                <div class="metric-card">
-                    <div class="metric-value">🎵 FREE</div>
-                    <div class="metric-label">Limited Access</div>
+                <div style="background: linear-gradient(135deg, #4facfe, #00f2fe); padding: 20px; border-radius: 15px; text-align: center; color: white;">
+                    <div style="font-size: 2em; font-weight: bold;">🎵 FREE</div>
+                    <div style="font-size: 0.9em;">Limited Access</div>
                 </div>
                 """, unsafe_allow_html=True)
     
-    # This Week's Hot Hits
+    st.markdown("---")
+    
+    # ============ THIS WEEK'S HOT HITS ============
     st.markdown("## 🔥 This Week's Hot Hits")
+    
     try:
         cur.execute("SELECT * FROM this_week_famous()")
-        hot_songs = cur.fetchall()
-        if hot_songs:
-            df_hot = pd.DataFrame(hot_songs, columns=["ID", "Title", "Artist", "Genre", "Rating", "Premium", "Play Count"])
+        rows = cur.fetchall()
+        
+        if rows:
+            # Create DataFrame with proper column names
+            df = pd.DataFrame(rows, columns=["ID", "Title", "Artist", "Genre", "Rating", "Premium", "Plays"])
             
-            # Display as cards
-            cols = st.columns(4)
-            for idx, song in enumerate(df_hot.head(8).itertuples()):
-                with cols[idx % 4]:
-                    premium_tag = "💎 PREMIUM" if song.Premium else "🎵 FREE"
+            # Filter songs with plays
+            df = df[df['Plays'] > 0]
+            
+            if not df.empty:
+                # Display as cards in 4 columns
+                cols = st.columns(4)
+                for idx, row in df.head(8).iterrows():
+                    with cols[idx % 4]:
+                        premium_tag = "💎 PREMIUM" if row['Premium'] else "🎵 FREE"
+                        st.markdown(f"""
+                        <div style="background: white; border-radius: 15px; padding: 15px; margin: 10px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <h4>🎵 {row['Title'][:25]}</h4>
+                            <p><b>🎤 {row['Artist']}</b></p>
+                            <p>🎸 {row['Genre']}</p>
+                            <p>⭐ {row['Rating']}/5.0</p>
+                            <p><span style="background: {'linear-gradient(135deg, #f093fb, #f5576c)' if row['Premium'] else 'linear-gradient(135deg, #4facfe, #00f2fe)'}; 
+                                              color: white; padding: 3px 8px; border-radius: 20px; font-size: 12px;">
+                                {premium_tag}
+                            </span></p>
+                            <p>📊 {row['Plays']} plays this week</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # Show total plays
+                st.markdown(f"### 📊 Total Weekly Plays: **{df['Plays'].sum()}**")
+                
+                # Show as table in expander
+                with st.expander("📋 View All Trending Songs"):
+                    st.dataframe(df[['Title', 'Artist', 'Genre', 'Rating', 'Plays']], 
+                                use_container_width=True, hide_index=True)
+            else:
+                st.info("📊 No plays yet this week. Start listening to create trends!")
+        else:
+            st.info("✨ No data yet. Start listening to see trending songs!")
+            
+    except Exception as e:
+        st.error(f"Error: {e}")
+        st.info("✨ Start listening to see trending songs!")
+    
+    st.markdown("---")
+    
+    # ============ FEATURED GENRES ============
+    st.markdown("### 🎵 Popular Genres")
+    
+    try:
+        cur.execute("""
+            SELECT genre, COUNT(*) as count, ROUND(AVG(rating), 1) as avg_rating
+            FROM songs
+            GROUP BY genre
+            ORDER BY count DESC
+            LIMIT 6
+        """)
+        genres = cur.fetchall()
+        
+        if genres:
+            genre_cols = st.columns(3)
+            for idx, genre_data in enumerate(genres):
+                with genre_cols[idx % 3]:
+                    genre_name, count, avg_rating = genre_data
                     st.markdown(f"""
-                    <div class="song-card">
-                        <h4>🎵 {song.Title[:20]}</h4>
-                        <p><b>🎤 {song.Artist}</b></p>
-                        <p>🎸 {song.Genre}</p>
-                        <p>⭐ {song.Rating}/5.0</p>
-                        <p><span class="{'premium-badge' if song.Premium else 'free-badge'}">{premium_tag}</span></p>
-                        <p>📊 {song.Play_Count} plays this week</p>
+                    <div style="background: #f0f2f6; padding: 15px; border-radius: 10px; margin: 5px; text-align: center;">
+                        <h4>🎸 {genre_name}</h4>
+                        <p>{count} songs</p>
+                        <p>⭐ {avg_rating}/5.0</p>
                     </div>
                     """, unsafe_allow_html=True)
-        else:
-            st.info("No trending songs this week. Start listening to create trends!")
     except Exception as e:
-        st.info(f"✨ Feature coming soon: Popular songs will appear here")
-
+        pass
+    
 # ====================== TAB 2: BROWSE SONGS ======================
 with tab2:
     st.markdown("## 🎵 Browse Music Library")
@@ -467,6 +521,7 @@ with tab2:
     except Exception as e:
         st.error(f"Error loading songs: {e}")
 
+# ============ TAB 3: DASHBOARD ======================
 # ====================== TAB 3: DASHBOARD ======================
 with tab3:
     if role in ["admin", "appuser"]:
@@ -688,36 +743,82 @@ with tab4:
                 st.info("😔 No songs found. Try different search terms!")
         except Exception as e:
             st.error(f"Search error: {e}")
+
 # ====================== TAB 5: HISTORY ======================
 with tab5:
     if role == "listener":
-        st.markdown("## 📜 Your Listening Journey")
+        st.subheader("📜 Your Listening Journey")
+        
+        # ============ HISTORY SECTION ============
+        st.markdown("### 🎵 Recent Plays")
         
         try:
-            cur.execute("SELECT * FROM my_history")
-            history = cur.fetchall()
+            cur.execute("""
+                SELECT 
+                    s.title as "Title",
+                    s.artist as "Artist", 
+                    s.genre as "Genre", 
+                    s.rating as "Rating",
+                    CASE WHEN s.is_premium = true THEN '💎 Premium' ELSE '🎵 Free' END as "Type",
+                    ph.played_at as "Played At", 
+                    ph.listen_duration as "Duration"
+                FROM play_history ph
+                JOIN songs s ON ph.song_id = s.song_id
+                WHERE ph.user_name = %s
+                ORDER BY ph.played_at DESC
+                LIMIT 50
+            """, (username,))
             
-            if history:
-                df_history = pd.DataFrame(history, columns=["Title", "Artist", "Genre", "Rating", "Premium", "Played At", "Duration"])
+            rows = cur.fetchall()
+            
+            if rows:
+                # Create DataFrame with proper column names
+                df_history = pd.DataFrame(rows, columns=[
+                    "Title", "Artist", "Genre", "Rating", "Type", "Played At", "Duration"
+                ])
                 st.dataframe(df_history, use_container_width=True, hide_index=True)
-                
-                # Stats
-                st.markdown("### 📊 Listening Stats")
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Songs Played", len(df_history))
-                col2.metric("Unique Artists", df_history['Artist'].nunique())
-                col3.metric("Avg Rating", f"{df_history['Rating'].mean():.1f}⭐")
             else:
-                st.info("🎧 No listening history yet. Start playing some songs!")
+                st.info("No listening history yet. Start playing some songs!")
+                
         except Exception as e:
-            st.info("✨ Your listening history will appear here")
+            st.error(f"Error loading history: {e}")
         
+        # ============ STREAK SECTION ============
+        st.markdown("---")
+        st.markdown("### 🔥 Your Listening Streak")
+        
+        try:
+            cur.execute("SELECT * FROM get_listening_streak(%s)", (username,))
+            streak_result = cur.fetchall()
+            
+            if streak_result:
+                df_streak = pd.DataFrame(streak_result, columns=["Date", "Streak Day"])
+                current_streak = df_streak.iloc[0]['Streak Day']
+                
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
+                    st.markdown(f"""
+                    <div style="text-align: center; background: #FF6B6B; padding: 20px; border-radius: 15px;">
+                        <h1 style="font-size: 3em; margin: 0; color: white;">🔥 {current_streak}</h1>
+                        <p style="color: white; margin: 0;">Day Streak!</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+                col1, col2 = st.columns(2)
+                col1.metric("📅 Total Active Days", len(df_streak))
+                col2.metric("🏆 Best Streak", df_streak['Streak Day'].max())
+            else:
+                st.info("✨ Listen today to start your streak!")
+        except Exception as e:
+            st.warning(f"Streak: {e}")
+        
+        # ============ RECORD PLAY SECTION ============
         st.markdown("---")
         st.markdown("### 🎮 Quick Play")
         
         col1, col2 = st.columns(2)
         with col1:
-            song_id = st.number_input("Song ID", min_value=1, step=1, help="Enter the Song ID from Browse tab")
+            song_id = st.number_input("Song ID", min_value=1, step=1)
         with col2:
             duration = st.number_input("Duration (seconds)", min_value=10, value=180, step=30)
         
@@ -729,11 +830,268 @@ with tab5:
                 if "Permission Denied" in result:
                     st.warning(result)
                 elif "successfully" in result.lower():
-                    st.success(f"🎵 {result}")
+                    st.success(result)
                     st.balloons()
+                    st.rerun()
                 else:
                     st.info(result)
             except Exception as e:
-                st.error(f"Failed to record play: {e}")
+                st.error(f"Error: {e}")
+    
     else:
-        st.info("📜 Listening history is available for listeners only")
+        st.info("🎵 Listening history is available for listeners only.")
+# ====================== TAB 6: RECOMMENDATIONS ======================
+# ====================== TAB 6: RECOMMENDATIONS ======================
+with tab6:
+    if role == "listener":
+        st.markdown("## 🎯 Personalized Recommendations")
+        
+        # Show user's age group info
+        try:
+            cur.execute("SELECT age, role_type FROM users WHERE user_name = %s", (username,))
+            user_data = cur.fetchone()
+            if user_data:
+                age = user_data[0]
+                user_type = user_data[1]
+                
+                if age:
+                    if age <= 25:
+                        age_group = "Kopila (Young & Energetic)"
+                        age_icon = "🎸"
+                    elif age <= 40:
+                        age_group = "Phool (Romantic & Mature)"
+                        age_icon = "🌹"
+                    else:
+                        age_group = "Basanta (Classic & Timeless)"
+                        age_icon = "🌸"
+                    
+                    st.info(f"{age_icon} Based on your age ({age}), you're in the **{age_group}** group")
+                    
+                    if user_type == 'listener_free':
+                        st.warning("🎵 Free users see only free songs in recommendations. Upgrade to premium for full access!")
+        except Exception as e:
+            st.warning(f"Could not load age info: {e}")
+        
+        # Age-based recommendations button
+        st.markdown("### 🌸 Your Personalized Picks")
+        
+        if st.button("🎵 Get My Recommendations", type="primary", use_container_width=True):
+            with st.spinner("Finding the perfect songs for you..."):
+                try:
+                    # Call the fixed function
+                    cur.execute("SELECT * FROM get_age_based_recommendations()")
+                    recs = cur.fetchall()
+                    
+                    if recs:
+                        df_recs = pd.DataFrame(recs, columns=["Title", "Artist", "Genre", "Rating", "Premium", "For"])
+                        
+                        # Display as cards
+                        st.markdown("#### 🎵 Recommended for You")
+                        
+                        cols = st.columns(3)
+                        for idx, song in enumerate(df_recs.head(9).itertuples()):
+                            with cols[idx % 3]:
+                                premium_badge = "💎 PREMIUM" if song.Premium else "🎵 FREE"
+                                st.markdown(f"""
+                                <div class="song-card">
+                                    <h4>🎵 {song.Title[:25]}</h4>
+                                    <p><b>🎤 {song.Artist}</b></p>
+                                    <p>🎸 {song.Genre}</p>
+                                    <p>⭐ {song.Rating}/5.0</p>
+                                    <p><span class="{'premium-badge' if song.Premium else 'free-badge'}">{premium_badge}</span></p>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        
+                        # Random song suggestion
+                        random_song = random.choice(recs)
+                        st.markdown(f"""
+                        <div class="info-card" style="text-align: center; margin-top: 20px;">
+                            <h3>🎲 Today's Top Pick for You</h3>
+                            <h2>🎵 {random_song[0]}</h2>
+                            <p>🎤 {random_song[1]} | 🎸 {random_song[2]} | ⭐ {random_song[3]}/5.0</p>
+                            <p><i>Based on your age group and listening preferences</i></p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.info("No recommendations available. Try listening to more songs!")
+                except Exception as e:
+                    st.error(f"Error getting recommendations: {e}")
+        
+        # Popular genres for you
+        st.markdown("### 🔥 Popular Genres")
+        try:
+            cur.execute("""
+                SELECT genre, COUNT(*) as count 
+                FROM songs 
+                GROUP BY genre 
+                ORDER BY count DESC 
+                LIMIT 6
+            """)
+            genres = cur.fetchall()
+            if genres:
+                df_genres = pd.DataFrame(genres, columns=["Genre", "Count"])
+                
+                # Create a simple bar chart
+                fig = px.bar(df_genres, x="Genre", y="Count", title="Most Popular Genres",
+                            color="Count", color_continuous_scale="Viridis")
+                fig.update_layout(height=350)
+                st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.info("Genre insights coming soon")
+            
+    else:
+        st.info("🎯 Personalized recommendations are available for listeners only")
+
+# ====================== TAB 7: PLAYLISTS ======================
+with tab7:
+    st.markdown("## 📋 Collaborative Playlists")
+    
+    # Check if user is premium for playlist creation
+    is_premium_user = False
+    if role == "listener":
+        cur.execute("SELECT role_type FROM users WHERE user_name = %s", (username,))
+        user_role = cur.fetchone()
+        is_premium_user = user_role and user_role[0] == 'listener_premium'
+    
+    # Create Playlist Section (Premium only)
+    if role != "admin" and is_premium_user:
+        with st.expander("➕ Create New Playlist", expanded=False):
+            playlist_name = st.text_input("Playlist Name", key="new_playlist")
+            playlist_desc = st.text_area("Description (optional)", key="playlist_desc")
+            is_public = st.checkbox("🌍 Make this playlist public", key="is_public")
+            
+            # Select songs
+            st.markdown("**Add Songs to Your Playlist**")
+            cur.execute("SELECT song_id, title, artist FROM songs LIMIT 100")
+            available_songs = cur.fetchall()
+            
+            song_options = [f"{s[1]} - {s[2]} (ID: {s[0]})" for s in available_songs]
+            selected_songs = st.multiselect("Select songs", song_options, key="selected_songs")
+            
+            if st.button("✨ Create Playlist", type="primary", use_container_width=True):
+                try:
+                    import re
+                    song_ids = []
+                    for song in selected_songs:
+                        match = re.search(r'ID: (\d+)', song)
+                        if match:
+                            song_ids.append(int(match.group(1)))
+                    
+                    cur.execute("SELECT create_playlist(%s, %s, %s)", (playlist_name, playlist_desc, song_ids))
+                    result = cur.fetchone()[0]
+                    
+                    if "successfully" in result.lower():
+                        # Update public status
+                        playlist_id = result.split()[-1]
+                        cur.execute("UPDATE playlists SET is_public = %s WHERE name = %s", (is_public, playlist_name))
+                        conn.commit()
+                        st.success(f"✅ {result}")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {result}")
+                except Exception as e:
+                    st.error(f"Failed to create playlist: {e}")
+    
+    elif role == "listener" and not is_premium_user:
+        st.warning("💎 Playlists are available for Premium users only! Upgrade to create and manage playlists.")
+    
+    # Browse Playlists
+    st.markdown("### 📚 Browse Playlists")
+    
+    try:
+        if role == "admin":
+            cur.execute("""
+                SELECT playlist_id, name, description, created_by, is_public, 
+                       array_length(song_ids, 1) as song_count
+                FROM playlists 
+                ORDER BY created_at DESC
+            """)
+        elif role == "appuser":
+            cur.execute("""
+                SELECT playlist_id, name, description, created_by, is_public,
+                       array_length(song_ids, 1) as song_count
+                FROM playlists 
+                WHERE tenant_id = current_setting('app.current_tenant', true)::uuid
+                ORDER BY created_at DESC
+            """)
+        else:  # listener (only premium can see playlists)
+            if is_premium_user:
+                cur.execute("""
+                    SELECT playlist_id, name, description, created_by, is_public,
+                           array_length(song_ids, 1) as song_count
+                    FROM playlists 
+                    WHERE is_public = TRUE OR created_by = current_user
+                    ORDER BY is_public DESC, created_at DESC
+                """)
+            else:
+                cur.execute("SELECT * FROM playlists WHERE FALSE")  # No results for free users
+        
+        playlists = cur.fetchall()
+        
+        if not playlists:
+            if is_premium_user:
+                st.info("No playlists yet. Create your first playlist above!")
+            elif role == "listener":
+                st.info("💎 Premium users can create and view playlists. Upgrade to premium!")
+            else:
+                st.info("No playlists available")
+        else:
+            # Display playlists in grid
+            cols = st.columns(3)
+            for idx, playlist in enumerate(playlists):
+                with cols[idx % 3]:
+                    with st.container():
+                        st.markdown(f"""
+                        <div class="song-card">
+                            <h3>📀 {playlist[1]}</h3>
+                            <p><i>{playlist[2] if playlist[2] else "No description"}</i></p>
+                            <p><b>👤 By:</b> {playlist[3]}</p>
+                            <p><b>📊 Songs:</b> {playlist[5] or 0}</p>
+                            <p><b>{'🌍 Public' if playlist[4] else '🔒 Private'}</b></p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        if st.button(f"🎵 View Songs", key=f"view_{playlist[0]}"):
+                            st.session_state.selected_playlist = playlist[0]
+            
+            # Show songs in selected playlist
+            if "selected_playlist" in st.session_state:
+                st.markdown("---")
+                st.markdown("### 🎶 Playlist Songs")
+                
+                try:
+                    cur.execute("""
+                        SELECT name, song_ids FROM playlists WHERE playlist_id = %s
+                    """, (st.session_state.selected_playlist,))
+                    playlist = cur.fetchone()
+                    
+                    if playlist and playlist[1]:
+                        cur.execute("""
+                            SELECT song_id, title, artist, genre, rating
+                            FROM songs WHERE song_id = ANY(%s)
+                        """, (playlist[1],))
+                        
+                        df_playlist_songs = pd.DataFrame(cur.fetchall(), 
+                                                          columns=["ID", "Title", "Artist", "Genre", "Rating"])
+                        st.dataframe(df_playlist_songs, use_container_width=True, hide_index=True)
+                        
+                        if st.button("Close", key="close_playlist"):
+                            del st.session_state.selected_playlist
+                            st.rerun()
+                    else:
+                        st.info("This playlist has no songs yet")
+                except Exception as e:
+                    st.error(f"Error loading songs: {e}")
+                    
+    except Exception as e:
+        st.error(f"Error loading playlists: {e}")
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; padding: 20px;">
+    <p>🎵 <b>WE CAN PLAY</b> - Your Music Streaming Platform</p>
+    <p style="font-size: 0.8em; color: #666;">Made with ❤️ using Streamlit | © 2024</p>
+</div>
+""", unsafe_allow_html=True)
